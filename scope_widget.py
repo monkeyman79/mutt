@@ -1,10 +1,10 @@
 import numpy as np
 import sys
 
-import pyaudio
 import moderngl
 from PyQt5 import QtCore, QtOpenGL, QtWidgets
 
+from audio_source import AudioSource
 
 class ScopeScene:
     VERTEX_COUNT = 4096
@@ -95,38 +95,8 @@ class PanTool:
         return (self.total_x - self.delta_x, self.total_y + self.delta_y)
 
 
-class AudioInputWorker(QtCore.QObject):
-    FX = np.linspace(-1.0, 1.0, 882)
-    CHUNK_SIZE = 882
-    data_ready = QtCore.pyqtSignal()
-
-    def __init__(self, audio):
-        super().__init__()
-        self.next_buffer = 0
-        self.buffers = np.zeros((2, self.CHUNK_SIZE), np.int16)
-        self.stream = audio.open(44100, 1, pyaudio.paInt16, input=True,
-                                 frames_per_buffer=self.CHUNK_SIZE,
-                                 stream_callback=self.stream_callback)
-
-    def stream_callback(self, in_data, frame_count, time_info, status):
-        self.buffers[self.next_buffer][:] = \
-            np.frombuffer(in_data, dtype=np.int16)
-        self.next_buffer = 1 - self.next_buffer
-        self.data_ready.emit()
-        return (None, pyaudio.paContinue)
-
-    def start(self):
-        self.stream.start_stream()
-
-    def stop(self):
-        self.stream.stop_stream()
-
-    def get_buffer(self) -> np.array:
-        return self.buffers[1 - self.next_buffer]
-
-
 class ScopeWidget(QtOpenGL.QGLWidget):
-    def __init__(self, audio, parent=None):
+    def __init__(self, parent=None):
         fmt = QtOpenGL.QGLFormat()
         fmt.setVersion(3, 3)
         fmt.setProfile(QtOpenGL.QGLFormat.CoreProfile)
@@ -138,20 +108,21 @@ class ScopeWidget(QtOpenGL.QGLWidget):
 
         super(ScopeWidget, self).__init__(fmt, parent,
                                           size=QtCore.QSize(512, 512))
-        self.audio_worker = AudioInputWorker(audio)
-        self.audio_worker.data_ready.connect(self.updateAudioData)
+
+    def connectAudio(self, audio_source: AudioSource):
+        self.audio_source = audio_source
+        self.audio_source.connectDataReady(self.updateAudioData)
 
     def updateAudioData(self):
-        chunk_size = self.audio_worker.CHUNK_SIZE
+        chunk_size = self.audio_source.CHUNK_SIZE
         self.audio_data[0:-chunk_size] = self.audio_data[chunk_size:]
-        self.audio_data[-chunk_size:] = self.audio_worker.get_buffer()
+        self.audio_data[-chunk_size:] = self.audio_source.getBuffer()
         self.update()
 
     def initializeGL(self):
         self.ctx = moderngl.create_context()
         self.framebuffer = self.ctx.detect_framebuffer()
         self.scene = ScopeScene(self.ctx)
-        self.audio_worker.start()
 
     def paintGL(self):
         self.framebuffer.use()
@@ -160,6 +131,12 @@ class ScopeWidget(QtOpenGL.QGLWidget):
 
     def resizeGL(self, w, h):
         self.ctx.viewport = (0, 0, w, h)
+
+    def closeEvent(self, evt):
+        worker = self.audio_source
+        if worker is not None:
+            worker.data_ready.disconnect(self.updateAudioData)
+        return super().closeEvent(evt)
 
     def mousePressEvent(self, evt):
         self._pan_tool.start_drag(evt.x() / self.width(),
@@ -179,9 +156,12 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         self.scene.pan(self._pan_tool.value)
         self.update()
 
-
-audio = pyaudio.PyAudio()
-app = QtWidgets.QApplication(sys.argv)
-widget = ScopeWidget(audio=audio)
-widget.show()
-sys.exit(app.exec_())
+if __name__ == "__main__":
+    from audio_source import PyAudioSource
+    app = QtWidgets.QApplication(sys.argv)
+    widget = ScopeWidget()
+    audio_source = PyAudioSource()
+    widget.show()
+    widget.connectAudio(audio_source)
+    audio_source.start()
+    sys.exit(app.exec_())

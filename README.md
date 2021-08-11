@@ -1,4 +1,4 @@
-# tkscope
+# tktapetool (working title)
 
 Nothing to see here, project under construction
 
