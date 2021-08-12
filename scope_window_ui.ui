@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>838</width>
-    <height>503</height>
+    <width>990</width>
+    <height>627</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -49,49 +49,101 @@
       </property>
      </widget>
     </item>
-    <item alignment="Qt::AlignTop">
-     <widget class="QGroupBox" name="groupBox">
+    <item>
+     <widget class="QWidget" name="controlsWidget" native="true">
       <property name="sizePolicy">
-       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
         <horstretch>0</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
-      <property name="minimumSize">
-       <size>
-        <width>192</width>
-        <height>96</height>
-       </size>
-      </property>
-      <property name="title">
-       <string>Trigger</string>
-      </property>
-      <widget class="QDial" name="dial">
-       <property name="geometry">
-        <rect>
-         <x>110</x>
-         <y>20</y>
-         <width>71</width>
-         <height>64</height>
-        </rect>
-       </property>
-      </widget>
-      <widget class="QLineEdit" name="lineEdit">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>50</y>
-         <width>81</width>
-         <height>25</height>
-        </rect>
-       </property>
-       <property name="maxLength">
-        <number>6</number>
-       </property>
-       <property name="readOnly">
-        <bool>true</bool>
-       </property>
-      </widget>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <item alignment="Qt::AlignTop">
+        <widget class="QGroupBox" name="groupBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>1</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>192</width>
+           <height>96</height>
+          </size>
+         </property>
+         <property name="title">
+          <string>Trigger</string>
+         </property>
+         <widget class="QDial" name="triggerLevelDial">
+          <property name="geometry">
+           <rect>
+            <x>110</x>
+            <y>20</y>
+            <width>71</width>
+            <height>64</height>
+           </rect>
+          </property>
+          <property name="minimum">
+           <number>-100</number>
+          </property>
+          <property name="maximum">
+           <number>100</number>
+          </property>
+         </widget>
+         <widget class="QLineEdit" name="triggerLevelEdit">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>50</y>
+            <width>81</width>
+            <height>25</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>0</string>
+          </property>
+          <property name="maxLength">
+           <number>6</number>
+          </property>
+          <property name="frame">
+           <bool>false</bool>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </widget>
+       </item>
+       <item alignment="Qt::AlignTop">
+        <widget class="QPushButton" name="listenButton">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+           <horstretch>1</horstretch>
+           <verstretch>1</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>Listen</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+         <property name="flat">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </item>
    </layout>
@@ -101,7 +153,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>838</width>
+     <width>990</width>
      <height>26</height>
     </rect>
    </property>

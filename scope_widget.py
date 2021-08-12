@@ -1,65 +1,184 @@
 import numpy as np
 import sys
 
+from typing import Tuple
+
 import moderngl
 from PyQt5 import QtCore, QtOpenGL, QtWidgets
 
 from audio_source import AudioSource
 
+_SIGNAL_VERTEX_SHADER = '''
+    #version 330
+
+    uniform int Count;
+    uniform vec2 MainRect;
+
+    in int in_vert;
+
+    void main() {
+        float x = (2. * gl_VertexID / Count - 1.);
+        float y = (in_vert / 32768.);
+        gl_Position = vec4(x * MainRect[0],
+                            y * MainRect[1],
+                            0.0, 1.0);
+    }
+'''
+
+_BASIC_FRAGMENT_SHADER = '''
+    #version 330
+
+    uniform vec4 Color;
+
+    out vec4 f_color;
+
+    void main() {
+        f_color = Color;
+    }
+'''
+
+_BASIC_VERTEX_SHADER = '''
+    #version 330
+    out int inst;
+    void main() {
+        inst = gl_InstanceID;
+    }
+'''
+
+_VLINE_GEOMETRY_SHADER = '''
+    #version 330
+    layout (points) in;
+    layout (line_strip, max_vertices = 2) out;
+    uniform int Y;
+    uniform int Segments;
+    uniform vec2 MainRect;
+    void main() {
+        float y = (Y / 32768.);
+        float x1 = float(4 * gl_PrimitiveIDIn) / Segments - 1;
+        float x2 = float(4 * gl_PrimitiveIDIn + 2) / Segments - 1;
+        gl_Position = vec4(MainRect[0] * x1, MainRect[1] * y, 0, 1);
+        EmitVertex();
+        gl_Position = vec4(MainRect[0] * x2, MainRect[1] * y, 0, 1);
+        EmitVertex();
+        EndPrimitive();
+    }
+'''
+
+_GRID_GEOMETRY_SHADER = '''
+    #version 330
+    layout (points) in;
+    layout (line_strip, max_vertices = 2) out;
+    in int inst[1];
+    uniform vec2 MainRect;
+    uniform int HCount;
+    uniform int VCount;
+    uniform int Segments;
+    void vline(float n, float m) {
+        float x = 0.;
+        if (HCount != 0)
+            x = 2 * n / HCount - 1;
+        float y1 = 4 * m / Segments - 1;
+        float y2 = (4 * m + 2) / Segments - 1;
+        gl_Position = vec4(MainRect[0] * x, MainRect[1] * y1, 0, 1);
+        EmitVertex();
+        gl_Position = vec4(MainRect[0] * x, MainRect[1] * y2, 0, 1);
+        EmitVertex();
+        EndPrimitive();
+    }
+    void hline(float n, float m) {
+        float y = 0;
+        if (VCount != 0)
+            y = 2 * n / VCount - 1;
+        float x1 = 4 * m / Segments - 1;
+        float x2 = (4 * m + 2) / Segments - 1;
+        gl_Position = vec4(MainRect[0] * x1, MainRect[1] * y, 0, 1);
+        EmitVertex();
+        gl_Position = vec4(MainRect[0] * x2, MainRect[1] * y, 0, 1);
+        EmitVertex();
+        EndPrimitive();
+    }
+    void main() {
+        if (inst[0] <= HCount)
+            vline(inst[0], gl_PrimitiveIDIn);
+        else
+            hline(inst[0] - HCount - 1, gl_PrimitiveIDIn);
+    }
+'''
+
 class ScopeScene:
-    VERTEX_COUNT = 4096
-    VERTEX_SIZE = 2
-    def __init__(self, ctx):
+    MAX_VERTEX_COUNT = 4410
+    VERTEX_WIDTH = 2
+    DEFAULT_SIGNAL_COLOR = (0.0, 1.0, 1.0, 1.0)
+    DEFAULT_TRIGGER_COLOR = (0.6, 0.3, 0.3, 0.5)
+    GRID_COLOR = (0.4, 0.4, 0.4, 1.0)
+    GRID_COLOR2 = (0.6, 0.6, 0.6, 1.0)
+    MARGIN = 0.02
+    HGRID_DIV = 10
+    VGRID_DIV = 8
+    GRID_SEGMENTS = 301
+    TRIGGER_SEGMENTS = 65
+    MAIN_RECT = (1-MARGIN, 1-MARGIN)
+
+    def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
-        self.prog = self.ctx.program(
-            vertex_shader='''
-                #version 330
+        self.signal_prog = self.ctx.program(
+            vertex_shader=_SIGNAL_VERTEX_SHADER,
+            fragment_shader=_BASIC_FRAGMENT_SHADER)
+        self.grid_prog = self.ctx.program(
+            vertex_shader=_BASIC_VERTEX_SHADER,
+            geometry_shader=_GRID_GEOMETRY_SHADER,
+            fragment_shader=_BASIC_FRAGMENT_SHADER)
+        self.vline_prog = self.ctx.program(
+            vertex_shader=_BASIC_VERTEX_SHADER,
+            geometry_shader=_VLINE_GEOMETRY_SHADER,
+            fragment_shader=_BASIC_FRAGMENT_SHADER)
 
-                uniform vec2 Pan;
-                uniform int Count;
-
-                in int in_vert;
-
-                void main() {
-                    gl_Position = vec4((2. * gl_VertexID / Count - 1.),
-                                       in_vert / 32767., 0.0, 1.0);
-                }
-            ''',
-            fragment_shader='''
-                #version 330
-
-                uniform vec4 Color;
-
-                out vec4 f_color;
-
-                void main() {
-                    f_color = Color;
-                }
-            ''',
-        )
-
-        self.vbo = ctx.buffer(reserve=self.VERTEX_COUNT * self.VERTEX_SIZE)
-        self.vao = ctx.vertex_array(self.prog, [(self.vbo, 'i2', 'in_vert')])
-        self.prog['Color'] = (0, 1, 1, 1)
-        self.prog['Count'] = self.VERTEX_COUNT
-
-    def pan(self, pos):
-        pass
-        # self.prog['Pan'].value = pos
+        self.vbo = ctx.buffer(
+                reserve=self.MAX_VERTEX_COUNT * self.VERTEX_WIDTH)
+        self.vao = ctx.vertex_array(
+                self.signal_prog, [(self.vbo, 'i2', 'in_vert')])
+        self.signal_prog['MainRect'] = self.MAIN_RECT
+        self.grid_vao = ctx.vertex_array(self.grid_prog, [])
+        self.grid_prog['MainRect'] = self.MAIN_RECT
+        self.vline_vao = ctx.vertex_array(self.vline_prog, [])
+        self.vline_prog['MainRect'] = self.MAIN_RECT
 
     def clear(self, color=(0, 0, 0, 0)):
         self.ctx.clear(*color)
 
-    def plot(self, points, type='line'):
+    def plot_signal(self, points, count, color = DEFAULT_SIGNAL_COLOR):
         self.vbo.orphan()
         self.vbo.write(points)
-        if type == 'line':
-            self.ctx.line_width = 5.0
-            self.vao.render(moderngl.LINE_STRIP, self.VERTEX_COUNT)
-        if type == 'points':
-            self.ctx.point_size = 3.0
-            self.vao.render(moderngl.POINTS, self.VERTEX_COUNT)
+        self.ctx.line_width = 1.0
+        self.signal_prog['Color'] = color
+        self.signal_prog['Count'] = count
+        self.vao.render(moderngl.LINE_STRIP, count)
 
+    def _plot_grid_frag(self, hcount, vcount, segments, color, ticks=False):
+        self.grid_prog['HCount'] = hcount
+        self.grid_prog['VCount'] = vcount
+        self.grid_prog['Color'] = color
+        self.grid_prog['Segments'] = segments
+        segs = segments // 2 + 1 if not ticks else 1
+        self.grid_vao.render(moderngl.POINTS, vertices=segs,
+                             instances=hcount+vcount+2)
+
+    def plot_grid(self):
+        self._plot_grid_frag(self.HGRID_DIV, self.VGRID_DIV,
+                             self.GRID_SEGMENTS, self.GRID_COLOR)
+        self._plot_grid_frag(0, 0, self.GRID_SEGMENTS, self.GRID_COLOR2)
+        self._plot_grid_frag(self.HGRID_DIV*5, self.VGRID_DIV*5,
+                             200, self.GRID_COLOR2, ticks=1)
+
+    def plot_frame(self):
+        self._plot_grid_frag(1, 1, 1, self.GRID_COLOR2)
+
+    def draw_vline(self, pos: int, segments = TRIGGER_SEGMENTS,
+                   color = DEFAULT_TRIGGER_COLOR):
+        self.vline_prog['Y'] = pos
+        self.vline_prog['Color'] = color
+        self.vline_prog['Segments'] = segments
+        self.vline_vao.render(moderngl.POINTS, vertices=segments // 2+1)
 
 class PanTool:
     def __init__(self):
@@ -101,10 +220,13 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         fmt.setVersion(3, 3)
         fmt.setProfile(QtOpenGL.QGLFormat.CoreProfile)
         fmt.setSampleBuffers(True)
-        self.scene = None
-        self.ctx = None
+        self.scene: ScopeScene = None
+        self.framebuffer: moderngl.Framebuffer = None
+        self.ctx: moderngl.Context = None
+        self.audio_source: AudioSource = None
         self._pan_tool = PanTool()
-        self.audio_data = np.zeros(ScopeScene.VERTEX_COUNT, np.int16)
+        self.trigger_level = 0
+        self.audio_data = np.zeros(ScopeScene.MAX_VERTEX_COUNT, np.int16)
 
         super(ScopeWidget, self).__init__(fmt, parent,
                                           size=QtCore.QSize(512, 512))
@@ -127,7 +249,10 @@ class ScopeWidget(QtOpenGL.QGLWidget):
     def paintGL(self):
         self.framebuffer.use()
         self.scene.clear()
-        self.scene.plot(self.audio_data)
+        self.scene.plot_grid()
+        self.scene.draw_vline(self.trigger_level)
+        self.scene.plot_signal(self.audio_data, len(self.audio_data))
+        self.scene.plot_frame()
 
     def resizeGL(self, w, h):
         self.ctx.viewport = (0, 0, w, h)
@@ -138,22 +263,25 @@ class ScopeWidget(QtOpenGL.QGLWidget):
             worker.data_ready.disconnect(self.updateAudioData)
         return super().closeEvent(evt)
 
+    def setTriggerLevel(self, level):
+        self.trigger_level = level
+
     def mousePressEvent(self, evt):
         self._pan_tool.start_drag(evt.x() / self.width(),
                                   evt.y() / self.height())
-        self.scene.pan(self._pan_tool.value)
+        # self.scene.pan(self._pan_tool.value)
         self.update()
 
     def mouseMoveEvent(self, evt):
         self._pan_tool.dragging(evt.x() / self.width(),
                                 evt.y() / self.height())
-        self.scene.pan(self._pan_tool.value)
+        # self.scene.pan(self._pan_tool.value)
         self.update()
 
     def mouseReleaseEvent(self, evt):
         self._pan_tool.stop_drag(evt.x() / self.width(),
                                  evt.y() / self.height())
-        self.scene.pan(self._pan_tool.value)
+        # self.scene.pan(self._pan_tool.value)
         self.update()
 
 if __name__ == "__main__":
