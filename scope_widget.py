@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 
-from typing import Tuple
+from enum import IntEnum
 
 import moderngl
 from PyQt5 import QtCore, QtOpenGL, QtWidgets
@@ -214,7 +214,18 @@ class PanTool:
         return (self.total_x - self.delta_x, self.total_y + self.delta_y)
 
 
+class TriggerMode(IntEnum):
+    Off = 0
+    Stop = 1
+    Normal = 2
+    Auto = 3
+    Single = 4
+
 class ScopeWidget(QtOpenGL.QGLWidget):
+    AUDIO_BUFFER_SIZE = 8820
+    AUTO_TRIGGER = 10
+    triggerModeChanged = QtCore.pyqtSignal()
+
     def __init__(self, parent=None):
         fmt = QtOpenGL.QGLFormat()
         fmt.setVersion(3, 3)
@@ -225,8 +236,13 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         self.ctx: moderngl.Context = None
         self.audio_source: AudioSource = None
         self._pan_tool = PanTool()
-        self.trigger_level = 0
-        self.audio_data = np.zeros(ScopeScene.MAX_VERTEX_COUNT, np.int16)
+        self._trigger_level = 0
+        self._auto_count = 0
+        self.display_data = np.zeros(ScopeScene.MAX_VERTEX_COUNT, np.int16)
+        self.display_count = ScopeScene.MAX_VERTEX_COUNT
+        self.audio_data = np.zeros(self.AUDIO_BUFFER_SIZE, np.int16)
+        self._trigger_mode = TriggerMode.Off
+        self._force_trigger = False
 
         super(ScopeWidget, self).__init__(fmt, parent,
                                           size=QtCore.QSize(512, 512))
@@ -235,10 +251,95 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         self.audio_source = audio_source
         self.audio_source.connectDataReady(self.updateAudioData)
 
+    def detectTriggerEdge(self, initial, arrange, first: bool = False) -> int:
+        cond = lambda x: x > self._trigger_level
+
+        cinitial = cond(initial)
+
+        if first:
+            crange = cond(arrange)
+            sidx = 0
+            if cinitial:
+                # was 'above' edge initially - find first element 'below'
+                sidx = np.argmin(crange)
+                # sidx will be 0 if either first element is below or none
+                if sidx == 0 and crange[0]:
+                    return -1
+
+            # find first element 'above'
+            idx = np.argmax(crange[sidx:])
+            # idx will be 0 if either first element is above or no elements
+            if idx == 0 and not crange[sidx]:
+                return -1
+            return sidx + idx
+        else:
+            # Reverse the array while checking condition
+            crrange = cond(arrange[::-1])
+            sidx = 0
+            if not crrange[0]:
+                # last element is 'below', find last 'above'
+                sidx = np.argmax(crrange)
+                if sidx == 0:
+                    # all elements 'below'
+                    return -1
+            
+            # now find last element 'below'
+            idx = np.argmin(crrange[sidx:])
+            if idx == 0:
+                # no 'raising' edge in array and first element is above
+                if not cinitial:
+                    return 0
+                return -1
+            # idx+sidx is index of last element before raising edge in the
+            # reversed array
+            return len(arrange) - (idx + sidx) + 1
+
+    def processTriggering(self):
+
+        chunk_size = self.audio_source.CHUNK_SIZE
+        max_screen = ScopeScene.MAX_VERTEX_COUNT
+        half_max_screen = max_screen // 2
+        audio_data = self.audio_data
+
+        # Detect trigger with delay to display half of screen after
+        scan_start = (self.AUDIO_BUFFER_SIZE
+                      - half_max_screen - chunk_size - 1)
+
+        if self._trigger_mode == TriggerMode.Off or self._force_trigger:
+            self._force_trigger = False
+            trigger_idx = chunk_size
+        elif self._trigger_mode == TriggerMode.Stop:
+            trigger_idx = -1
+        else:
+            first = (self._trigger_mode == TriggerMode.Single)
+            trigger_idx = self.detectTriggerEdge(
+                    audio_data[scan_start-1], 
+                    audio_data[scan_start:scan_start+chunk_size], first)
+            if self._trigger_mode == TriggerMode.Auto:
+                if trigger_idx == -1:
+                    self._auto_count += 1
+                    if self._auto_count >= self.AUTO_TRIGGER:
+                        self._auto_count = 0
+                        trigger_idx = chunk_size
+                else:
+                    self._auto_count = 0
+
+        if trigger_idx != -1:
+            if self._trigger_mode == TriggerMode.Single:
+                self._trigger_mode = TriggerMode.Stop
+                self.triggerModeChanged.emit()
+            copy_start = scan_start + trigger_idx - half_max_screen
+            self.display_data[:] = audio_data[
+                    copy_start:copy_start + max_screen]
+
     def updateAudioData(self):
         chunk_size = self.audio_source.CHUNK_SIZE
-        self.audio_data[0:-chunk_size] = self.audio_data[chunk_size:]
-        self.audio_data[-chunk_size:] = self.audio_source.getBuffer()
+        audio_data = self.audio_data
+
+        # Move data in audio buffer and append new chunk
+        audio_data[0:-chunk_size] = audio_data[chunk_size:]
+        audio_data[-chunk_size:] = self.audio_source.getBuffer()
+        self.processTriggering()
         self.update()
 
     def initializeGL(self):
@@ -250,8 +351,10 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         self.framebuffer.use()
         self.scene.clear()
         self.scene.plot_grid()
-        self.scene.draw_vline(self.trigger_level)
-        self.scene.plot_signal(self.audio_data, len(self.audio_data))
+        self.scene.draw_vline(self._trigger_level)
+        plot_start = (ScopeScene.MAX_VERTEX_COUNT - self.display_count) // 2
+        self.scene.plot_signal(self.display_data[plot_start:plot_start+self.display_count], 
+                               self.display_count)
         self.scene.plot_frame()
 
     def resizeGL(self, w, h):
@@ -263,8 +366,25 @@ class ScopeWidget(QtOpenGL.QGLWidget):
             worker.data_ready.disconnect(self.updateAudioData)
         return super().closeEvent(evt)
 
-    def setTriggerLevel(self, level):
-        self.trigger_level = level
+    def forceTrigger(self):
+        self._force_trigger = True
+
+    @property
+    def triggerMode(self):
+        return self._trigger_mode
+
+    @triggerMode.setter
+    def triggerMode(self, mode: TriggerMode):
+        self._auto_count = 0
+        self._trigger_mode = mode
+
+    @property
+    def triggerLevel(self):
+        return self._trigger_level
+
+    @triggerLevel.setter
+    def triggerLevel(self, level):
+        self._trigger_level = level
 
     def mousePressEvent(self, evt):
         self._pan_tool.start_drag(evt.x() / self.width(),

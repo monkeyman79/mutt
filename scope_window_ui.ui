@@ -58,7 +58,7 @@
        </sizepolicy>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
-       <item alignment="Qt::AlignTop">
+       <item>
         <widget class="QGroupBox" name="groupBox">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -68,8 +68,8 @@
          </property>
          <property name="minimumSize">
           <size>
-           <width>192</width>
-           <height>96</height>
+           <width>201</width>
+           <height>201</height>
           </size>
          </property>
          <property name="title">
@@ -78,10 +78,10 @@
          <widget class="QDial" name="triggerLevelDial">
           <property name="geometry">
            <rect>
-            <x>110</x>
-            <y>20</y>
-            <width>71</width>
-            <height>64</height>
+            <x>0</x>
+            <y>30</y>
+            <width>81</width>
+            <height>81</height>
            </rect>
           </property>
           <property name="minimum">
@@ -97,9 +97,9 @@
           </property>
           <property name="geometry">
            <rect>
-            <x>10</x>
-            <y>50</y>
-            <width>81</width>
+            <x>110</x>
+            <y>40</y>
+            <width>71</width>
             <height>25</height>
            </rect>
           </property>
@@ -109,13 +109,106 @@
           <property name="maxLength">
            <number>6</number>
           </property>
-          <property name="frame">
-           <bool>false</bool>
-          </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>
           </property>
           <property name="readOnly">
+           <bool>true</bool>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="stopPushButton">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>150</y>
+            <width>61</width>
+            <height>31</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Stop</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="singlePushButton">
+          <property name="geometry">
+           <rect>
+            <x>70</x>
+            <y>150</y>
+            <width>61</width>
+            <height>31</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Single</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="normalPushButton">
+          <property name="geometry">
+           <rect>
+            <x>70</x>
+            <y>120</y>
+            <width>61</width>
+            <height>31</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Normal</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="forcePushButton">
+          <property name="geometry">
+           <rect>
+            <x>130</x>
+            <y>150</y>
+            <width>61</width>
+            <height>31</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Force</string>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="offPushButton">
+          <property name="geometry">
+           <rect>
+            <x>10</x>
+            <y>120</y>
+            <width>61</width>
+            <height>31</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Off</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+         <widget class="QPushButton" name="autoPushButton">
+          <property name="geometry">
+           <rect>
+            <x>130</x>
+            <y>120</y>
+            <width>61</width>
+            <height>31</height>
+           </rect>
+          </property>
+          <property name="text">
+           <string>Auto</string>
+          </property>
+          <property name="checkable">
            <bool>true</bool>
           </property>
          </widget>
