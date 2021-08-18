@@ -105,6 +105,43 @@ _GRID_GEOMETRY_SHADER = '''
     }
 '''
 
+_TEXTURE_VERTEX_SHADER = '''
+    #version 330
+
+    uniform vec2 MainRect;
+    uniform int TexOffset;
+
+    in vec2 in_vert;
+    in vec2 in_texcoord;
+
+    out vec2 v_texcoord;
+
+    void main() {
+        v_texcoord = in_texcoord - vec2(0, TexOffset / 1024.);
+        gl_Position = vec4(in_vert[0] * MainRect[0],
+                           in_vert[1] * MainRect[1],
+                           0.0, 1.0);
+    }
+'''
+
+_TEXTURE_FRAGMENT_SHADER = '''
+    #version 330
+
+    uniform sampler2D Texture;
+
+    in vec2 v_texcoord;
+    out vec4 f_color;
+
+    vec4 palette(float v) {
+        return vec4(v*v, v*v*v, v*(1-v)+v*v*v, 1.);
+    }
+
+    void main() {
+        f_color = palette(texture(Texture, v_texcoord)[0]);
+    }
+'''
+
+
 class ScopeScene:
     MAX_VERTEX_COUNT = 4410
     VERTEX_WIDTH = 2
@@ -118,33 +155,65 @@ class ScopeScene:
     GRID_SEGMENTS = 301
     TRIGGER_SEGMENTS = 65
     MAIN_RECT = (1-MARGIN, 1-MARGIN)
+    FFT_WIDTH = 1024
+    FFT_HEIGHT = 1024
 
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
         self.signal_prog = self.ctx.program(
             vertex_shader=_SIGNAL_VERTEX_SHADER,
             fragment_shader=_BASIC_FRAGMENT_SHADER)
-        self.grid_prog = self.ctx.program(
-            vertex_shader=_BASIC_VERTEX_SHADER,
-            geometry_shader=_GRID_GEOMETRY_SHADER,
-            fragment_shader=_BASIC_FRAGMENT_SHADER)
-        self.vline_prog = self.ctx.program(
-            vertex_shader=_BASIC_VERTEX_SHADER,
-            geometry_shader=_VLINE_GEOMETRY_SHADER,
-            fragment_shader=_BASIC_FRAGMENT_SHADER)
-
         self.vbo = ctx.buffer(
                 reserve=self.MAX_VERTEX_COUNT * self.VERTEX_WIDTH)
         self.vao = ctx.vertex_array(
                 self.signal_prog, [(self.vbo, 'i2', 'in_vert')])
         self.signal_prog['MainRect'] = self.MAIN_RECT
+
+        self.grid_prog = self.ctx.program(
+            vertex_shader=_BASIC_VERTEX_SHADER,
+            geometry_shader=_GRID_GEOMETRY_SHADER,
+            fragment_shader=_BASIC_FRAGMENT_SHADER)
         self.grid_vao = ctx.vertex_array(self.grid_prog, [])
         self.grid_prog['MainRect'] = self.MAIN_RECT
+
+        self.vline_prog = self.ctx.program(
+            vertex_shader=_BASIC_VERTEX_SHADER,
+            geometry_shader=_VLINE_GEOMETRY_SHADER,
+            fragment_shader=_BASIC_FRAGMENT_SHADER)
         self.vline_vao = ctx.vertex_array(self.vline_prog, [])
         self.vline_prog['MainRect'] = self.MAIN_RECT
 
+        self.fft_prog = self.ctx.program(
+            vertex_shader=_TEXTURE_VERTEX_SHADER,
+            fragment_shader=_TEXTURE_FRAGMENT_SHADER)
+        self.fft_vbo = ctx.buffer(np.array([
+            -1.0, -1.0,  0, 0,  # lower left
+            -1.0,  1.0,  0, 1,  # upper left
+             1.0, -1.0,  1, 0,  # lower right
+             1.0,  1.0,  1, 1,  # upper right
+        ], dtype=np.float32))
+        self.fft_vao = ctx.vertex_array(self.fft_prog, 
+               [(self.fft_vbo, '2f4 2f4', 'in_vert', 'in_texcoord')])
+        self.fft_prog['MainRect'] = self.MAIN_RECT
+        self.fft_texture = self.ctx.texture(
+                (self.FFT_WIDTH, self.FFT_HEIGHT), 1, dtype='f4')
+        # self.fft_texture.filter = moderngl.NEAREST, moderngl.NEAREST
+        self.fft_texture.swizzle = 'R001'
+        self.fft_buffer = ctx.buffer(
+                reserve=self.FFT_WIDTH * self.FFT_HEIGHT * 4)
+        self.fft_pos = 0
+
     def clear(self, color=(0, 0, 0, 0)):
         self.ctx.clear(*color)
+
+    def plot_fft(self, data):
+        self.fft_buffer.write(data, offset=(
+                self.FFT_HEIGHT - self.fft_pos - 1) * self.FFT_WIDTH * 4)
+        self.fft_texture.write(self.fft_buffer)
+        self.fft_texture.use(location=0)
+        self.fft_prog['TexOffset'] = self.fft_pos
+        self.fft_vao.render(moderngl.TRIANGLE_STRIP)
+        self.fft_pos = (self.fft_pos + 1) % self.FFT_HEIGHT
 
     def plot_signal(self, points, count, color = DEFAULT_SIGNAL_COLOR):
         self.vbo.orphan()
@@ -161,7 +230,7 @@ class ScopeScene:
         self.grid_prog['Segments'] = segments
         segs = segments // 2 + 1 if not ticks else 1
         self.grid_vao.render(moderngl.POINTS, vertices=segs,
-                             instances=hcount+vcount+2)
+                             instances=hcount + vcount + 2)
 
     def plot_grid(self):
         self._plot_grid_frag(self.HGRID_DIV, self.VGRID_DIV,
@@ -336,9 +405,10 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         chunk_size = self.audio_source.CHUNK_SIZE
         audio_data = self.audio_data
 
+        data_in = self.audio_source.getBuffer()
         # Move data in audio buffer and append new chunk
         audio_data[0:-chunk_size] = audio_data[chunk_size:]
-        audio_data[-chunk_size:] = self.audio_source.getBuffer()
+        audio_data[-chunk_size:] = data_in
         self.processTriggering()
         self.update()
 
@@ -350,6 +420,8 @@ class ScopeWidget(QtOpenGL.QGLWidget):
     def paintGL(self):
         self.framebuffer.use()
         self.scene.clear()
+        fft = np.maximum((np.log(np.abs(np.fft.rfft(self.audio_data[-4095:])) + 1.).astype('f4') - 11) / 4, 0.)
+        self.scene.plot_fft(fft[:1023])
         self.scene.plot_grid()
         self.scene.draw_vline(self._trigger_level)
         plot_start = (ScopeScene.MAX_VERTEX_COUNT - self.display_count) // 2

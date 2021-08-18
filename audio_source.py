@@ -29,7 +29,7 @@ class AudioSource(QtCore.QObject):
 
 
 class PyAudioSource(AudioSource):
-    CHUNK_SIZE = 882
+    CHUNK_SIZE = 441 * 4
 
     def __init__(self, audio: pyaudio.PyAudio = None, enable_listening = False):
         super().__init__()
