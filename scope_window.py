@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QAbstractButton, QApplication, QMainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow
 
 from scope_widget import TriggerMode
 from scope_window_ui import Ui_ScopeWindow
@@ -14,8 +14,14 @@ class ScopeWindow(QMainWindow):
     
     def triggerLevelDialChanged(self):
         value = self.ui.triggerLevelDial.value()
-        self.ui.triggerLevelEdit.setText(str(value))
-        self.ui.scopeWidget.triggerLevel = (value * 32767 / 100)
+        if value > 0:
+            level = int((value / 100.) ** 2 * 32767)
+        elif value < 0:
+            level = int(-((-value / 100.) ** 2 * 32768))
+        else:
+            level = 0
+        self.ui.scopeWidget.triggerLevel = level
+        self.ui.triggerLevelEdit.setText(str(level))
 
     def listenButtonClicked(self):
         if self.ui.listenButton.isChecked():
@@ -50,16 +56,16 @@ class ScopeWindow(QMainWindow):
                 self.triggerLevelDialChanged)
         self.ui.listenButton.clicked.connect(self.listenButtonClicked)
         self.triggerModeButtons = {
-            TriggerMode.Off: self.ui.offPushButton,
-            TriggerMode.Stop: self.ui.stopPushButton,
-            TriggerMode.Normal: self.ui.normalPushButton,
-            TriggerMode.Auto: self.ui.autoPushButton,
-            TriggerMode.Single: self.ui.singlePushButton }
+            TriggerMode.Off: self.ui.offToolButton,
+            TriggerMode.Stop: self.ui.stopToolButton,
+            TriggerMode.Normal: self.ui.normalToolButton,
+            TriggerMode.Auto: self.ui.autoToolButton,
+            TriggerMode.Single: self.ui.singleToolButton }
         for mode, button in self.triggerModeButtons.items():
             action = lambda checked, mode=mode: self.triggerModeChanged(
                     mode=mode, checked=checked, setmode=True)
             button.clicked.connect(action)
-        self.ui.forcePushButton.clicked.connect(self.forceButtonClicked)
+        self.ui.forceToolButton.clicked.connect(self.forceButtonClicked)
         self.ui.scopeWidget.triggerModeChanged.connect(self.updateTriggerMode)
         self.activeTriggerModeButton = None
         self.updateTriggerMode()
