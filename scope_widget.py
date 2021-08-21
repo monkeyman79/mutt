@@ -2,6 +2,7 @@ import numpy as np
 import sys
 
 from enum import IntEnum
+from typing import Callable, Tuple, cast
 
 import moderngl
 from PyQt5 import QtCore, QtOpenGL, QtWidgets
@@ -143,10 +144,8 @@ _TEXTURE_FRAGMENT_SHADER = '''
 
 
 class ScopeScene:
-    MAX_VERTEX_COUNT = 4410
+    MAX_VERTEX_COUNT = 4096
     VERTEX_WIDTH = 2
-    DEFAULT_SIGNAL_COLOR = (0.0, 1.0, 1.0, 1.0)
-    DEFAULT_TRIGGER_COLOR = (0.6, 0.3, 0.3, 0.5)
     GRID_COLOR = (0.4, 0.4, 0.4, 1.0)
     GRID_COLOR2 = (0.6, 0.6, 0.6, 1.0)
     MARGIN = 0.02
@@ -155,7 +154,7 @@ class ScopeScene:
     GRID_SEGMENTS = 301
     TRIGGER_SEGMENTS = 65
     MAIN_RECT = (1-MARGIN, 1-MARGIN)
-    FFT_WIDTH = 1024
+    FFT_WIDTH = 512
     FFT_HEIGHT = 1024
 
     def __init__(self, ctx: moderngl.Context):
@@ -186,14 +185,16 @@ class ScopeScene:
         self.fft_prog = self.ctx.program(
             vertex_shader=_TEXTURE_VERTEX_SHADER,
             fragment_shader=_TEXTURE_FRAGMENT_SHADER)
-        self.fft_vbo = ctx.buffer(np.array([
-            -1.0, -1.0,  0, 0,  # lower left
-            -1.0,  1.0,  0, 1,  # upper left
-             1.0, -1.0,  1, 0,  # lower right
-             1.0,  1.0,  1, 1,  # upper right
-        ], dtype=np.float32))
-        self.fft_vao = ctx.vertex_array(self.fft_prog, 
-               [(self.fft_vbo, '2f4 2f4', 'in_vert', 'in_texcoord')])
+        self.fft_vbo = ctx.buffer(
+            np.array([
+                -1.0, -1.0,  0, 0,  # lower left
+                -1.0,  1.0,  0, 1,  # upper left
+                1.0, -1.0,  1, 0,  # lower right
+                1.0,  1.0,  1, 1,  # upper right
+            ], dtype=np.float32))
+        self.fft_vao = ctx.vertex_array(
+                self.fft_prog,
+                [(self.fft_vbo, '2f4 2f4', 'in_vert', 'in_texcoord')])
         self.fft_prog['MainRect'] = self.MAIN_RECT
         self.fft_texture = self.ctx.texture(
                 (self.FFT_WIDTH, self.FFT_HEIGHT), 1, dtype='f4')
@@ -215,7 +216,7 @@ class ScopeScene:
         self.fft_vao.render(moderngl.TRIANGLE_STRIP)
         self.fft_pos = (self.fft_pos + 1) % self.FFT_HEIGHT
 
-    def plot_signal(self, points, count, color = DEFAULT_SIGNAL_COLOR):
+    def plot_signal(self, points, count, color):
         self.vbo.orphan()
         self.vbo.write(points)
         self.ctx.line_width = 1.0
@@ -242,12 +243,13 @@ class ScopeScene:
     def plot_frame(self):
         self._plot_grid_frag(1, 1, 1, self.GRID_COLOR2)
 
-    def draw_vline(self, pos: int, segments = TRIGGER_SEGMENTS,
-                   color = DEFAULT_TRIGGER_COLOR):
+    def draw_vline(self, pos: int, color: Tuple[int, int, int, int],
+                   segments=TRIGGER_SEGMENTS):
         self.vline_prog['Y'] = pos
         self.vline_prog['Color'] = color
         self.vline_prog['Segments'] = segments
         self.vline_vao.render(moderngl.POINTS, vertices=segments // 2+1)
+
 
 class PanTool:
     def __init__(self):
@@ -290,10 +292,24 @@ class TriggerMode(IntEnum):
     Auto = 3
     Single = 4
 
+
+class TriggerEdge(IntEnum):
+    Positive = 0
+    Negative = 1
+
+
 class ScopeWidget(QtOpenGL.QGLWidget):
-    AUDIO_BUFFER_SIZE = 8820
+    AUDIO_BUFFER_SIZE = 8192
     AUTO_TRIGGER = 10
+    FFT_CALC_SIZE = 4096
+    TRIGGER_COLOR = (0.6, 0.3, 0.3, 0.5)
+    TRIGGER_ARM_COLOR = (0.5, 0.4, 0.4, 0.5)
+    SIGNAL_COLOR = (0.0, 1.0, 1.0, 1.0)
+    FFT_GRAPH_COLOR = (0.8, 0.0, 0.3, 1.0)
+    RELAY_GRAPH_COLOR = (0.8, 0.8, 0.0, 1.0)
+
     triggerModeChanged = QtCore.pyqtSignal()
+    audioOverflowSignal = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
         fmt = QtOpenGL.QGLFormat()
@@ -306,69 +322,80 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         self.audio_source: AudioSource = None
         self._pan_tool = PanTool()
         self._trigger_level = 0
+        self._deadband = 0
+        self._deadband_level = 0
         self._auto_count = 0
         self.display_data = np.zeros(ScopeScene.MAX_VERTEX_COUNT, np.int16)
+        self.relay_display_data = np.zeros(
+            ScopeScene.MAX_VERTEX_COUNT, np.int8)
         self.display_count = ScopeScene.MAX_VERTEX_COUNT
         self.audio_data = np.zeros(self.AUDIO_BUFFER_SIZE, np.int16)
+        self.relay_data = -1 * np.ones(self.AUDIO_BUFFER_SIZE, np.int8)
         self._trigger_mode = TriggerMode.Off
+        self._trigger_edge = TriggerEdge.Positive
         self._force_trigger = False
+        self.fft_tex = True
+        self.fft_tex_log = True
+        self.fft_graph = True
+        self.fft_graph_log = False
+        self.relay_graph = False
 
         super(ScopeWidget, self).__init__(fmt, parent,
                                           size=QtCore.QSize(512, 512))
 
     def connectAudio(self, audio_source: AudioSource):
         self.audio_source = audio_source
+        self.chunk_range = np.arange(audio_source.CHUNK_SIZE + 1)
         self.audio_source.connectDataReady(self.updateAudioData)
 
-    def detectTriggerEdge(self, initial, arrange, first: bool = False) -> int:
-        cond = lambda x: x > self._trigger_level
-
-        cinitial = cond(initial)
+    def detectTriggerEdge(self, last_value: int, arrange: np.ndarray,
+                          first: bool = False) -> int:
 
         if first:
-            crange = cond(arrange)
-            sidx = 0
-            if cinitial:
-                # was 'above' edge initially - find first element 'below'
-                sidx = np.argmin(crange)
+            sidx: int = 0
+            if last_value != -1:
+                # was not armed initially - find first element 'below'
+                sidx = cast(int, np.argmin(arrange))
                 # sidx will be 0 if either first element is below or none
-                if sidx == 0 and crange[0]:
+                if sidx == 0 and arrange[0] != -1:
                     return -1
 
             # find first element 'above'
-            idx = np.argmax(crange[sidx:])
+            idx = np.argmax(arrange[sidx:])
             # idx will be 0 if either first element is above or no elements
-            if idx == 0 and not crange[sidx]:
+            if idx == 0 and arrange[sidx] != 1:
                 return -1
-            return sidx + idx
+            return cast(int, sidx + idx)
+
         else:
             # Reverse the array while checking condition
-            crrange = cond(arrange[::-1])
+            crrange = arrange[::-1]
             sidx = 0
-            if not crrange[0]:
+            if crrange[0] != 1:
                 # last element is 'below', find last 'above'
-                sidx = np.argmax(crrange)
+                sidx = cast(int, np.argmax(crrange))
                 if sidx == 0:
                     # all elements 'below'
                     return -1
-            
+
             # now find last element 'below'
             idx = np.argmin(crrange[sidx:])
             if idx == 0:
                 # no 'raising' edge in array and first element is above
-                if not cinitial:
+                if last_value == -1:
                     return 0
                 return -1
+
             # idx+sidx is index of last element before raising edge in the
             # reversed array
-            return len(arrange) - (idx + sidx) + 1
+            return cast(int, len(arrange) - (idx + sidx) + 1)
 
     def processTriggering(self):
 
         chunk_size = self.audio_source.CHUNK_SIZE
         max_screen = ScopeScene.MAX_VERTEX_COUNT
         half_max_screen = max_screen // 2
-        audio_data = self.audio_data
+        relay_data = self.relay_data
 
         # Detect trigger with delay to display half of screen after
         scan_start = (self.AUDIO_BUFFER_SIZE
@@ -382,8 +409,8 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         else:
             first = (self._trigger_mode == TriggerMode.Single)
             trigger_idx = self.detectTriggerEdge(
-                    audio_data[scan_start-1], 
-                    audio_data[scan_start:scan_start+chunk_size], first)
+                    relay_data[scan_start-1],
+                    relay_data[scan_start:scan_start+chunk_size], first)
             if self._trigger_mode == TriggerMode.Auto:
                 if trigger_idx == -1:
                     self._auto_count += 1
@@ -398,19 +425,66 @@ class ScopeWidget(QtOpenGL.QGLWidget):
                 self._trigger_mode = TriggerMode.Stop
                 self.triggerModeChanged.emit()
             copy_start = scan_start + trigger_idx - half_max_screen
-            self.display_data[:] = audio_data[
+            self.display_data[:] = self.audio_data[
                     copy_start:copy_start + max_screen]
+            self.relay_display_data[:] = self.relay_data[
+                    copy_start:copy_start + max_screen]
+
+    def updateDeadbandLevel(self):
+        if self._trigger_edge == TriggerEdge.Positive:
+            deadband_level = self._trigger_level - self._deadband
+            if deadband_level < -32768:
+                deadband_level = 32768
+        else:
+            deadband_level = self._trigger_level + self.deadband
+            if deadband_level > 32767:
+                deadband_level = 32767
+        self._deadband_level = deadband_level
+
+    def updateRelayData(self, data_in: np.ndarray):
+        chunk_size = self.audio_source.CHUNK_SIZE
+        relay_data = self.relay_data
+        one = np.int8(1)
+
+        # Put last relay condition at the beginning of buffer to process
+        relay_chunk = np.zeros(chunk_size + 1, dtype=np.int8)
+        relay_chunk[0] = relay_data[-1]
+
+        if self._trigger_edge == TriggerEdge.Positive:
+            trigger_op: Callable = np.greater
+            arm_op: Callable = np.less
+        else:
+            trigger_op = np.less
+            arm_op = np.greater
+
+        # Put relay state for each sample in the buffer
+        np.subtract(one * trigger_op(data_in, self._trigger_level),
+                    one * arm_op(data_in, self._deadband_level),
+                    out=relay_chunk[1:], dtype=np.int8)
+
+        # https://stackoverflow.com/questions/68869535/numpy-accumulate-greater-operation
+        # Process hysteresis on the chunk
+        masked_indexes = np.where((relay_chunk != 0), self.chunk_range, 0)
+        hyst_indexes = np.maximum.accumulate(masked_indexes)
+        result = relay_chunk[hyst_indexes][1:]
+
+        # Move data in buffer append new chunk
+        relay_data[0:-chunk_size] = relay_data[chunk_size:]
+        relay_data[-chunk_size:] = result
 
     def updateAudioData(self):
         chunk_size = self.audio_source.CHUNK_SIZE
         audio_data = self.audio_data
 
-        data_in = self.audio_source.getBuffer()
+        data_in, overflow = self.audio_source.getBuffer()
         # Move data in audio buffer and append new chunk
         audio_data[0:-chunk_size] = audio_data[chunk_size:]
         audio_data[-chunk_size:] = data_in
+        self.updateRelayData(data_in)
         self.processTriggering()
         self.update()
+        if overflow:
+            self.audioOverflowSignal.emit()
 
     def initializeGL(self):
         self.ctx = moderngl.create_context()
@@ -420,13 +494,48 @@ class ScopeWidget(QtOpenGL.QGLWidget):
     def paintGL(self):
         self.framebuffer.use()
         self.scene.clear()
-        fft = np.maximum((np.log(np.abs(np.fft.rfft(self.audio_data[-4095:])) + 1.).astype('f4') - 11) / 4, 0.)
-        self.scene.plot_fft(fft[:1023])
+        if self.fft_tex or self.fft_graph:
+            fft_data = np.abs((np.fft.rfft(
+                self.audio_data[-self.FFT_CALC_SIZE:])
+                    [:ScopeScene.FFT_WIDTH - 1]))
+            if (self.fft_tex and self.fft_tex_log
+                    or self.fft_graph and self.fft_graph_log):
+                fft_data2 = np.maximum((
+                    np.log((fft_data + 1.)) - 11.) / 4., 0.).astype('f4')
+                if self.fft_tex_log:
+                    fft_tex_data = fft_data2
+                if self.fft_graph_log:
+                    fft_graph_data = fft_data2
+            if (self.fft_tex and not self.fft_tex_log
+                    or self.fft_graph and not self.fft_graph_log):
+                fft_data2 = (fft_data / (32768. * 512.)).astype('f4')
+                if not self.fft_tex_log:
+                    fft_tex_data = fft_data2
+                if not self.fft_graph_log:
+                    fft_graph_data = fft_data2
+        if self.fft_tex:
+            self.scene.plot_fft(fft_tex_data)
         self.scene.plot_grid()
-        self.scene.draw_vline(self._trigger_level)
+        self.scene.draw_vline(self._deadband_level, self.TRIGGER_ARM_COLOR)
+        self.scene.draw_vline(self._trigger_level, self.TRIGGER_COLOR)
         plot_start = (ScopeScene.MAX_VERTEX_COUNT - self.display_count) // 2
-        self.scene.plot_signal(self.display_data[plot_start:plot_start+self.display_count], 
-                               self.display_count)
+        if self.fft_graph:
+            self.scene.plot_signal((fft_graph_data * 32768 - 32768)
+                                   .astype('i2'), ScopeScene.FFT_WIDTH - 1,
+                                   color=self.FFT_GRAPH_COLOR)
+        if self.relay_graph:
+            if self._trigger_edge == TriggerEdge.Positive:
+                multiply = np.int16(8192)
+            else:
+                multiply = np.int16(-8192)
+            self.scene.plot_signal(self.relay_display_data.astype(
+                                        'i2') * multiply,
+                                   self.display_count,
+                                   color=self.RELAY_GRAPH_COLOR)
+        self.scene.plot_signal(self.display_data
+                               [plot_start:plot_start+self.display_count],
+                               self.display_count,
+                               color=self.SIGNAL_COLOR)
         self.scene.plot_frame()
 
     def resizeGL(self, w, h):
@@ -451,12 +560,31 @@ class ScopeWidget(QtOpenGL.QGLWidget):
         self._trigger_mode = mode
 
     @property
-    def triggerLevel(self):
+    def triggerLevel(self) -> int:
         return self._trigger_level
 
     @triggerLevel.setter
-    def triggerLevel(self, level):
+    def triggerLevel(self, level: int):
         self._trigger_level = level
+        self.updateDeadbandLevel()
+
+    @property
+    def triggerEdge(self) -> TriggerEdge:
+        return self._trigger_edge
+
+    @triggerEdge.setter
+    def triggerEdge(self, edge: TriggerEdge):
+        self._trigger_edge = edge
+        self.updateDeadbandLevel()
+
+    @property
+    def deadband(self):
+        return self._deadband
+
+    @deadband.setter
+    def deadband(self, value):
+        self._deadband = value
+        self.updateDeadbandLevel()
 
     def mousePressEvent(self, evt):
         self._pan_tool.start_drag(evt.x() / self.width(),
@@ -475,6 +603,7 @@ class ScopeWidget(QtOpenGL.QGLWidget):
                                  evt.y() / self.height())
         # self.scene.pan(self._pan_tool.value)
         self.update()
+
 
 if __name__ == "__main__":
     from audio_source import PyAudioSource

@@ -395,6 +395,9 @@
                <iconset>
                 <normaloff>res/edgerising.png</normaloff>res/edgerising.png</iconset>
               </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
             <item>
@@ -426,6 +429,9 @@
               <property name="icon">
                <iconset>
                 <normaloff>res/edgefalling.png</normaloff>res/edgefalling.png</iconset>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
               </property>
              </widget>
             </item>
