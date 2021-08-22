@@ -6,7 +6,8 @@ from PyQt5 import QtCore
 
 
 class AudioSource(QtCore.QObject):
-    CHUNK_SIZE = 625 * 2
+    CHUNK_SIZE = 625 * 4
+    FREQ = 62500
     data_ready = QtCore.pyqtSignal()
 
     def connectDataReady(self, func):
@@ -27,6 +28,9 @@ class AudioSource(QtCore.QObject):
     def getBuffer(self) -> Tuple[np.ndarray, bool]:
         return (np.zeros(self.CHUNK_SIZE, np.int16), False)
 
+    def writeOutput(self, data: np.ndarray):
+        pass
+
 
 class PyAudioSource(AudioSource):
     CHUNK_SIZE = 625 * 4
@@ -39,6 +43,7 @@ class PyAudioSource(AudioSource):
         else:
             self.audio = audio
         self._buffer = np.zeros(self.CHUNK_SIZE, np.int16)
+        self._output_buffer = np.zeros(self.CHUNK_SIZE, np.int16)
         self._overflow = False
         self._have_chunk = False
         self._listening = False
@@ -60,7 +65,6 @@ class PyAudioSource(AudioSource):
         if (status & pyaudio.paInputOverflow) != 0:
             self._overflow = True
         self.data_ready.emit()
-        self._have_chunk = True
         return (None, pyaudio.paContinue)
 
     def output_callback(self, in_data: Optional[bytes], frame_count: int,
@@ -69,7 +73,7 @@ class PyAudioSource(AudioSource):
             return (None, pyaudio.paComplete)
         if self._have_chunk:
             self._have_chunk = False
-            return (bytes(self._buffer), pyaudio.paContinue)
+            return (bytes(self._output_buffer), pyaudio.paContinue)
         return (np.zeros(self.CHUNK_SIZE, np.int16), pyaudio.paContinue)
 
     def start(self):
@@ -95,3 +99,7 @@ class PyAudioSource(AudioSource):
         overflow = self._overflow
         self._overflow = False
         return self._buffer, overflow
+
+    def writeOutput(self, data: np.ndarray):
+        self._output_buffer[:] = data
+        self._have_chunk = True
