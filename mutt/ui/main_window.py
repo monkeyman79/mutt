@@ -1,19 +1,18 @@
 #! /bin/env python3
 
 import sys
-import os
 import math
 from typing import Optional
 
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication, QMainWindow, QToolButton
 
-from scope_widget import ScopeScene, ScopeWidget, TriggerEdge, TriggerMode
-from scope_window_ui import Ui_ScopeWindow
-from audio_source import AudioSource, PyAudioSource
+from .scope_scene import ScopeScene, TriggerEdge, TriggerMode
+from .main_window_ui import Ui_ScopeWindow
+from ..audio import AudioSource, PyAudioSource
 
 
-class ScopeWindow(QMainWindow):
+class MUTTMainWindow(QMainWindow):
     LOG_DIAL_VALS = [1, 2, 5]
     TRIGGER_LEVEL_CHANGE = 50
 
@@ -26,7 +25,7 @@ class ScopeWindow(QMainWindow):
         self.prev_horiz_dial = 0
         self.initUi()
         if audio is not None:
-            self.ui.scopeWidget.connectAudio(audio)
+            self.scene.connect_audio(audio)
 
     @staticmethod
     def dialDiff(value: int, prev: int):
@@ -42,12 +41,12 @@ class ScopeWindow(QMainWindow):
         return diff
 
     def showTriggerLevel(self):
-        self.ui.triggerLevelEdit.setText(str(self.ui.scopeWidget.triggerLevel))
+        self.ui.triggerLevelEdit.setText(str(self.scene.triggerLevel))
 
     def triggerLevelDialChanged(self):
         value = self.ui.triggerLevelDial.value()
         diff = self.dialDiff(value, self.prev_trigger_dial)
-        level = self.ui.scopeWidget.triggerLevel
+        level = self.scene.triggerLevel
         modifiers = QApplication.keyboardModifiers()
         if (modifiers & QtCore.Qt.ShiftModifier) == QtCore.Qt.ShiftModifier:
             tick = 1
@@ -61,17 +60,17 @@ class ScopeWindow(QMainWindow):
             level = 32767
         elif level < -32768:
             level = -32768
-        self.ui.scopeWidget.triggerLevel = level
+        self.scene.triggerLevel = level
         self.prev_trigger_dial = value
         self.showTriggerLevel()
 
     def showDeadband(self):
-        self.ui.deadbandLineEdit.setText(str(self.ui.scopeWidget.deadband))
+        self.ui.deadbandLineEdit.setText(str(self.scene.deadband))
 
     def deadbandDialChanged(self):
         value = self.ui.deadbandDial.value()
         diff = self.dialDiff(value, self.prev_deadband_dial)
-        deadband = self.ui.scopeWidget.deadband
+        deadband = self.scene.deadband
         modifiers = QApplication.keyboardModifiers()
         if (modifiers & QtCore.Qt.ShiftModifier) == QtCore.Qt.ShiftModifier:
             tick = 1
@@ -85,16 +84,16 @@ class ScopeWindow(QMainWindow):
             deadband = 65535
         elif deadband < 0:
             deadband = 0
-        self.ui.scopeWidget.deadband = deadband
+        self.scene.deadband = deadband
         self.prev_deadband_dial = value
         self.showDeadband()
 
     def showHorizScale(self):
-        if self.ui.scopeWidget.audio_source is not None:
-            freq = self.ui.scopeWidget.audio_source.FREQ
+        if self.scene.audio_source is not None:
+            freq = self.scene.audio_source.FREQ
         else:
             freq = AudioSource.FREQ
-        sample_count = self.ui.scopeWidget.displayCount
+        sample_count = self.scene.displayCount
         time_per_div = (1000000 * sample_count // freq + 9) // 10
         if time_per_div >= 1000:
             time_text = "{} ms".format(time_per_div // 1000)
@@ -106,15 +105,15 @@ class ScopeWindow(QMainWindow):
         value = self.ui.horizScaleDial.value()
         divisor = self.LOG_DIAL_VALS[value % 3] * 10 ** (value // 3)
         sample_count = int(round(ScopeScene.MAX_VERTEX_COUNT / divisor))
-        self.ui.scopeWidget.displayCount = sample_count
+        self.scene.displayCount = sample_count
         self.showHorizScale()
 
     def showHorizPosition(self):
-        if self.ui.scopeWidget.audio_source is not None:
-            freq = self.ui.scopeWidget.audio_source.FREQ
+        if self.scene.audio_source is not None:
+            freq = self.scene.audio_source.FREQ
         else:
             freq = AudioSource.FREQ
-        position = self.ui.scopeWidget.displayPosition
+        position = self.scene.displayPosition
         # Convert to milliseconds
         t_offset = 1000 * position / freq
         if t_offset == 0:
@@ -129,7 +128,7 @@ class ScopeWindow(QMainWindow):
         value = self.ui.horizPositionDial.value()
         diff = self.dialDiff(value, self.prev_horiz_dial)
         # Samples per horizontal division
-        div_count = (self.ui.scopeWidget.displayCount
+        div_count = (self.scene.displayCount
                      / ScopeScene.HGRID_DIV / 10)
         modifiers = QApplication.keyboardModifiers()
         if (modifiers & QtCore.Qt.ShiftModifier) == QtCore.Qt.ShiftModifier:
@@ -138,18 +137,18 @@ class ScopeWindow(QMainWindow):
         # Round up
         div_count = int(math.ceil(div_count))
         # Update position
-        position = self.ui.scopeWidget.displayPosition + diff * div_count
-        self.ui.scopeWidget.displayPosition = position
+        position = self.scene.displayPosition + diff * div_count
+        self.scene.displayPosition = position
         self.prev_horiz_dial = value
         self.showHorizPosition()
 
     def listenButtonClicked(self):
         if self.ui.listenButton.isChecked():
-            result = self.ui.scopeWidget.audio_source.start_listening()
+            result = self.scene.audio_source.start_listening()
             if not result:
                 self.ui.listenButton.setChecked(False)
         else:
-            self.ui.scopeWidget.audio_source.stop_listening()
+            self.scene.audio_source.stop_listening()
 
     def triggerEdgeChanged(self, edge: TriggerEdge, checked, setedge):
         newEdgeButton = self.triggerEdgeButtons[edge]
@@ -158,11 +157,11 @@ class ScopeWindow(QMainWindow):
                 self.activeTriggerEdgeButton.setChecked(False)
             self.activeTriggerEdgeButton = newEdgeButton
             if setedge:
-                self.ui.scopeWidget.triggerEdge = edge
+                self.scene.triggerEdge = edge
         newEdgeButton.setChecked(True)
 
     def updateTriggerEdge(self):
-        edge = self.ui.scopeWidget.triggerEdge
+        edge = self.scene.triggerEdge
         self.triggerEdgeChanged(edge, True, False)
 
     def triggerModeChanged(self, mode: TriggerMode, checked, setmode=False):
@@ -172,19 +171,19 @@ class ScopeWindow(QMainWindow):
                 self.activeTriggerModeButton.setChecked(False)
             self.activeTriggerModeButton = newModeButton
             if setmode:
-                self.ui.scopeWidget.triggerMode = mode
+                self.scene.triggerMode = mode
         # Don't allow unchecking
         newModeButton.setChecked(True)
 
     def updateTriggerMode(self):
-        mode = self.ui.scopeWidget.triggerMode
+        mode = self.scene.triggerMode
         self.triggerModeChanged(mode, checked=True, setmode=False)
 
     def audioOverflowSlot(self):
         self.ui.statusbar.showMessage("Audio buffer overflow", 1000)
 
     def forceButtonClicked(self):
-        self.ui.scopeWidget.forceTrigger()
+        self.scene.forceTrigger()
 
     def bindBoolPropertyButton(self, button: QToolButton, obj, prop: property):
         button.setChecked(prop.__get__(obj))
@@ -193,12 +192,8 @@ class ScopeWindow(QMainWindow):
 
     def initUi(self):
         self.ui = Ui_ScopeWindow()
-        # pyuic generated code loads icons from relative paths
-        cwd = os.getcwd()
-        modulepath = os.path.dirname(os.path.abspath(__file__))
-        os.chdir(modulepath)
         self.ui.setupUi(self)
-        os.chdir(cwd)
+        self.scene = self.ui.scopeWidget.scene
         self.ui.triggerLevelDial.valueChanged.connect(
                 self.triggerLevelDialChanged)
         self.ui.deadbandDial.valueChanged.connect(
@@ -238,13 +233,13 @@ class ScopeWindow(QMainWindow):
         self.updateTriggerEdge()
 
         for prop, button in {
-                ScopeWidget.displaySignal: self.ui.displaySignalButton,
-                ScopeWidget.displayRelay: self.ui.displayRelayButton,
-                ScopeWidget.displayFFTImage: self.ui.displayFFTImageButton,
-                ScopeWidget.displayFFTGraph: self.ui.displayFFTGraphButton,
-                ScopeWidget.displayTriggerLines: self.ui.displayTriggerButton,
-                ScopeWidget.displayGrid: self.ui.displayGridButton}.items():
-            self.bindBoolPropertyButton(button, self.ui.scopeWidget, prop)
+                ScopeScene.displaySignal: self.ui.displaySignalButton,
+                ScopeScene.displayRelay: self.ui.displayRelayButton,
+                ScopeScene.displayFFTImage: self.ui.displayFFTImageButton,
+                ScopeScene.displayFFTGraph: self.ui.displayFFTGraphButton,
+                ScopeScene.displayTriggerLines: self.ui.displayTriggerButton,
+                ScopeScene.displayGrid: self.ui.displayGridButton}.items():
+            self.bindBoolPropertyButton(button, self.scene, prop)
 
         self.ui.scopeWidget.audioOverflowSignal.connect(self.audioOverflowSlot)
 
@@ -254,13 +249,17 @@ class ScopeWindow(QMainWindow):
         self.showHorizPosition()
 
 
-if __name__ == "__main__":
+def Run():
     audio_source = PyAudioSource(enable_listening=True)
     app = QApplication(sys.argv)
-    window = ScopeWindow(audio_source)
+    window = MUTTMainWindow(audio_source)
     window.show()
     audio_source.start()
-    result = app.exec()
+    app.exec()
     audio_source.stop_listening()
     audio_source.stop()
     audio_source.audio.terminate()
+
+
+if __name__ == "__main__":
+    Run()

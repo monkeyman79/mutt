@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Audio Scope</string>
+   <string>M.U.T.T</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="sizePolicy">
@@ -126,8 +126,8 @@
                <string>+</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/edgerising.png</normaloff>res/edgerising.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/edgerising.png</normaloff>:/icons/res/edgerising.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -161,8 +161,8 @@
                <string>-</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/edgefalling.png</normaloff>res/edgefalling.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/edgefalling.png</normaloff>:/icons/res/edgefalling.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -360,8 +360,8 @@
                <string>Off</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/triggeroff.png</normaloff>res/triggeroff.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/triggeroff.png</normaloff>:/icons/res/triggeroff.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -389,8 +389,8 @@
                <string>Normal</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/triggernormal.png</normaloff>res/triggernormal.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/triggernormal.png</normaloff>:/icons/res/triggernormal.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -418,8 +418,8 @@
                <string>Auto</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/triggerauto.png</normaloff>res/triggerauto.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/triggerauto.png</normaloff>:/icons/res/triggerauto.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -447,8 +447,8 @@
                <string/>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/triggersingle.png</normaloff>res/triggersingle.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/triggersingle.png</normaloff>:/icons/res/triggersingle.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -476,8 +476,8 @@
                <string>Force</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/triggerforce.png</normaloff>res/triggerforce.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/triggerforce.png</normaloff>:/icons/res/triggerforce.png</iconset>
               </property>
               <property name="checkable">
                <bool>false</bool>
@@ -505,8 +505,8 @@
                <string>Stop</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/triggerstop.png</normaloff>res/triggerstop.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/triggerstop.png</normaloff>:/icons/res/triggerstop.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -578,8 +578,8 @@
                <string>S</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/displaysignal.png</normaloff>res/displaysignal.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/displaysignal.png</normaloff>:/icons/res/displaysignal.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -607,8 +607,8 @@
                <string>R</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/displayrelay.png</normaloff>res/displayrelay.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/displayrelay.png</normaloff>:/icons/res/displayrelay.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -636,8 +636,8 @@
                <string>F</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/displayffttex.png</normaloff>res/displayffttex.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/displayffttex.png</normaloff>:/icons/res/displayffttex.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -665,8 +665,8 @@
                <string>f</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/displayfftgraph.png</normaloff>res/displayfftgraph.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/displayfftgraph.png</normaloff>:/icons/res/displayfftgraph.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -694,8 +694,8 @@
                <string>T</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/displaytrigger.png</normaloff>res/displaytrigger.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/displaytrigger.png</normaloff>:/icons/res/displaytrigger.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -723,8 +723,8 @@
                <string>G</string>
               </property>
               <property name="icon">
-               <iconset>
-                <normaloff>res/displaygrid.png</normaloff>res/displaygrid.png</iconset>
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/displaygrid.png</normaloff>:/icons/res/displaygrid.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -916,9 +916,11 @@
   <customwidget>
    <class>ScopeWidget</class>
    <extends>QOpenGLWidget</extends>
-   <header>scope_widget</header>
+   <header>.scope_widget</header>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

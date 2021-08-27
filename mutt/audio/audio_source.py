@@ -1,17 +1,18 @@
-from typing import Optional, Mapping, Tuple
+from typing import Callable, Optional, Mapping, Tuple
 
 import numpy as np
 import pyaudio
-from PyQt5 import QtCore
 
 
-class AudioSource(QtCore.QObject):
+class AudioSource:
     CHUNK_SIZE = 625 * 4
     FREQ = 62500
-    data_ready = QtCore.pyqtSignal()
 
-    def connectDataReady(self, func):
-        self.data_ready.connect(func)
+    def __init__(self):
+        self.data_ready: Optional[Callable[[AudioSource], None]] = None
+
+    def connect_data_ready(self, func):
+        self.data_ready = func
 
     def start(self):
         pass
@@ -25,10 +26,10 @@ class AudioSource(QtCore.QObject):
     def stop_listening(self):
         pass
 
-    def getBuffer(self) -> Tuple[np.ndarray, bool]:
+    def get_buffer(self) -> Tuple[np.ndarray, bool]:
         return (np.zeros(self.CHUNK_SIZE, np.int16), False)
 
-    def writeOutput(self, data: np.ndarray):
+    def write_output(self, data: np.ndarray):
         pass
 
 
@@ -64,7 +65,9 @@ class PyAudioSource(AudioSource):
         self._buffer[:] = np.frombuffer(in_data, dtype=np.int16)
         if (status & pyaudio.paInputOverflow) != 0:
             self._overflow = True
-        self.data_ready.emit()
+        data_ready = self.data_ready
+        if data_ready is not None:
+            data_ready(self)
         return (None, pyaudio.paContinue)
 
     def output_callback(self, in_data: Optional[bytes], frame_count: int,
@@ -95,11 +98,11 @@ class PyAudioSource(AudioSource):
             self.output_stream.stop_stream()
             self._listening = False
 
-    def getBuffer(self) -> Tuple[np.ndarray, bool]:
+    def get_buffer(self) -> Tuple[np.ndarray, bool]:
         overflow = self._overflow
         self._overflow = False
         return self._buffer, overflow
 
-    def writeOutput(self, data: np.ndarray):
+    def write_output(self, data: np.ndarray):
         self._output_buffer[:] = data
         self._have_chunk = True

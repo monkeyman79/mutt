@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'scope_window_ui.ui'
+# Form implementation generated from reading ui file 'main_window_ui.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.4
 #
@@ -64,7 +64,7 @@ class Ui_ScopeWindow(object):
         self.raisingToolButton.setMinimumSize(QtCore.QSize(31, 0))
         self.raisingToolButton.setMaximumSize(QtCore.QSize(31, 31))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("res/edgerising.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap(":/icons/res/edgerising.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.raisingToolButton.setIcon(icon)
         self.raisingToolButton.setCheckable(True)
         self.raisingToolButton.setObjectName("raisingToolButton")
@@ -78,7 +78,7 @@ class Ui_ScopeWindow(object):
         self.fallingToolButton.setMinimumSize(QtCore.QSize(31, 0))
         self.fallingToolButton.setMaximumSize(QtCore.QSize(31, 31))
         icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap("res/edgefalling.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon1.addPixmap(QtGui.QPixmap(":/icons/res/edgefalling.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.fallingToolButton.setIcon(icon1)
         self.fallingToolButton.setCheckable(True)
         self.fallingToolButton.setObjectName("fallingToolButton")
@@ -151,7 +151,7 @@ class Ui_ScopeWindow(object):
         self.offToolButton.setMinimumSize(QtCore.QSize(31, 0))
         self.offToolButton.setMaximumSize(QtCore.QSize(31, 31))
         icon2 = QtGui.QIcon()
-        icon2.addPixmap(QtGui.QPixmap("res/triggeroff.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon2.addPixmap(QtGui.QPixmap(":/icons/res/triggeroff.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.offToolButton.setIcon(icon2)
         self.offToolButton.setCheckable(True)
         self.offToolButton.setObjectName("offToolButton")
@@ -160,7 +160,7 @@ class Ui_ScopeWindow(object):
         self.normalToolButton.setMinimumSize(QtCore.QSize(31, 0))
         self.normalToolButton.setMaximumSize(QtCore.QSize(31, 31))
         icon3 = QtGui.QIcon()
-        icon3.addPixmap(QtGui.QPixmap("res/triggernormal.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon3.addPixmap(QtGui.QPixmap(":/icons/res/triggernormal.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.normalToolButton.setIcon(icon3)
         self.normalToolButton.setCheckable(True)
         self.normalToolButton.setObjectName("normalToolButton")
@@ -169,7 +169,7 @@ class Ui_ScopeWindow(object):
         self.autoToolButton.setMinimumSize(QtCore.QSize(31, 0))
         self.autoToolButton.setMaximumSize(QtCore.QSize(31, 31))
         icon4 = QtGui.QIcon()
-        icon4.addPixmap(QtGui.QPixmap("res/triggerauto.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon4.addPixmap(QtGui.QPixmap(":/icons/res/triggerauto.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.autoToolButton.setIcon(icon4)
         self.autoToolButton.setCheckable(True)
         self.autoToolButton.setObjectName("autoToolButton")
@@ -179,7 +179,7 @@ class Ui_ScopeWindow(object):
         self.singleToolButton.setMaximumSize(QtCore.QSize(31, 31))
         self.singleToolButton.setText("")
         icon5 = QtGui.QIcon()
-        icon5.addPixmap(QtGui.QPixmap("res/triggersingle.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon5.addPixmap(QtGui.QPixmap(":/icons/res/triggersingle.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.singleToolButton.setIcon(icon5)
         self.singleToolButton.setCheckable(True)
         self.singleToolButton.setObjectName("singleToolButton")
@@ -188,7 +188,7 @@ class Ui_ScopeWindow(object):
         self.forceToolButton.setMinimumSize(QtCore.QSize(31, 0))
         self.forceToolButton.setMaximumSize(QtCore.QSize(31, 31))
         icon6 = QtGui.QIcon()
-        icon6.addPixmap(QtGui.QPixmap("res/triggerforce.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon6.addPixmap(QtGui.QPixmap(":/icons/res/triggerforce.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.forceToolButton.setIcon(icon6)
         self.forceToolButton.setCheckable(False)
         self.forceToolButton.setObjectName("forceToolButton")
@@ -197,7 +197,7 @@ class Ui_ScopeWindow(object):
         self.stopToolButton.setMinimumSize(QtCore.QSize(31, 0))
         self.stopToolButton.setMaximumSize(QtCore.QSize(31, 31))
         icon7 = QtGui.QIcon()
-        icon7.addPixmap(QtGui.QPixmap("res/triggerstop.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon7.addPixmap(QtGui.QPixmap(":/icons/res/triggerstop.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.stopToolButton.setIcon(icon7)
         self.stopToolButton.setCheckable(True)
         self.stopToolButton.setObjectName("stopToolButton")
@@ -219,7 +219,7 @@ class Ui_ScopeWindow(object):
         self.displaySignalButton.setMinimumSize(QtCore.QSize(31, 0))
         self.displaySignalButton.setMaximumSize(QtCore.QSize(31, 31))
         icon8 = QtGui.QIcon()
-        icon8.addPixmap(QtGui.QPixmap("res/displaysignal.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon8.addPixmap(QtGui.QPixmap(":/icons/res/displaysignal.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.displaySignalButton.setIcon(icon8)
         self.displaySignalButton.setCheckable(True)
         self.displaySignalButton.setObjectName("displaySignalButton")
@@ -228,7 +228,7 @@ class Ui_ScopeWindow(object):
         self.displayRelayButton.setMinimumSize(QtCore.QSize(31, 0))
         self.displayRelayButton.setMaximumSize(QtCore.QSize(31, 31))
         icon9 = QtGui.QIcon()
-        icon9.addPixmap(QtGui.QPixmap("res/displayrelay.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon9.addPixmap(QtGui.QPixmap(":/icons/res/displayrelay.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.displayRelayButton.setIcon(icon9)
         self.displayRelayButton.setCheckable(True)
         self.displayRelayButton.setObjectName("displayRelayButton")
@@ -237,7 +237,7 @@ class Ui_ScopeWindow(object):
         self.displayFFTImageButton.setMinimumSize(QtCore.QSize(31, 0))
         self.displayFFTImageButton.setMaximumSize(QtCore.QSize(31, 31))
         icon10 = QtGui.QIcon()
-        icon10.addPixmap(QtGui.QPixmap("res/displayffttex.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon10.addPixmap(QtGui.QPixmap(":/icons/res/displayffttex.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.displayFFTImageButton.setIcon(icon10)
         self.displayFFTImageButton.setCheckable(True)
         self.displayFFTImageButton.setObjectName("displayFFTImageButton")
@@ -246,7 +246,7 @@ class Ui_ScopeWindow(object):
         self.displayFFTGraphButton.setMinimumSize(QtCore.QSize(31, 0))
         self.displayFFTGraphButton.setMaximumSize(QtCore.QSize(31, 31))
         icon11 = QtGui.QIcon()
-        icon11.addPixmap(QtGui.QPixmap("res/displayfftgraph.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon11.addPixmap(QtGui.QPixmap(":/icons/res/displayfftgraph.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.displayFFTGraphButton.setIcon(icon11)
         self.displayFFTGraphButton.setCheckable(True)
         self.displayFFTGraphButton.setObjectName("displayFFTGraphButton")
@@ -255,7 +255,7 @@ class Ui_ScopeWindow(object):
         self.displayTriggerButton.setMinimumSize(QtCore.QSize(31, 0))
         self.displayTriggerButton.setMaximumSize(QtCore.QSize(31, 31))
         icon12 = QtGui.QIcon()
-        icon12.addPixmap(QtGui.QPixmap("res/displaytrigger.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon12.addPixmap(QtGui.QPixmap(":/icons/res/displaytrigger.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.displayTriggerButton.setIcon(icon12)
         self.displayTriggerButton.setCheckable(True)
         self.displayTriggerButton.setObjectName("displayTriggerButton")
@@ -264,7 +264,7 @@ class Ui_ScopeWindow(object):
         self.displayGridButton.setMinimumSize(QtCore.QSize(31, 0))
         self.displayGridButton.setMaximumSize(QtCore.QSize(31, 31))
         icon13 = QtGui.QIcon()
-        icon13.addPixmap(QtGui.QPixmap("res/displaygrid.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon13.addPixmap(QtGui.QPixmap(":/icons/res/displaygrid.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.displayGridButton.setIcon(icon13)
         self.displayGridButton.setCheckable(True)
         self.displayGridButton.setObjectName("displayGridButton")
@@ -345,7 +345,7 @@ class Ui_ScopeWindow(object):
 
     def retranslateUi(self, ScopeWindow):
         _translate = QtCore.QCoreApplication.translate
-        ScopeWindow.setWindowTitle(_translate("ScopeWindow", "Audio Scope"))
+        ScopeWindow.setWindowTitle(_translate("ScopeWindow", "M.U.T.T"))
         self.levelsGroupBox.setTitle(_translate("ScopeWindow", "Levels"))
         self.raisingToolButton.setToolTip(_translate("ScopeWindow", "Raising (Positive) Edge"))
         self.raisingToolButton.setText(_translate("ScopeWindow", "+"))
@@ -387,4 +387,5 @@ class Ui_ScopeWindow(object):
         self.label_4.setText(_translate("ScopeWindow", "H. Position"))
         self.horizPositionLineEdit.setText(_translate("ScopeWindow", "0 us"))
         self.listenButton.setText(_translate("ScopeWindow", "Listen"))
-from scope_widget import ScopeWidget
+from .scope_widget import ScopeWidget
+from . import resources_rc

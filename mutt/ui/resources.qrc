@@ -1,0 +1,19 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="icons">
+        <file>res/displayfftgraph.png</file>
+        <file>res/displayffttex.png</file>
+        <file>res/displaygrid.png</file>
+        <file>res/displayrelay.png</file>
+        <file>res/displaysignal.png</file>
+        <file>res/displaytrigger.png</file>
+        <file>res/edgefalling.png</file>
+        <file>res/edgerising.png</file>
+        <file>res/triggerauto.png</file>
+        <file>res/triggerforce.png</file>
+        <file>res/triggernormal.png</file>
+        <file>res/triggeroff.png</file>
+        <file>res/triggersingle.png</file>
+        <file>res/triggerstop.png</file>
+    </qresource>
+</RCC>
