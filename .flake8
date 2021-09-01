@@ -1,0 +1,3 @@
+[flake8]
+
+exclude = mutt/ui/resources_rc.py, mutt/ui/main_window_ui.py

@@ -217,7 +217,7 @@
           </size>
          </property>
          <property name="title">
-          <string>Trigger</string>
+          <string>Trigger &amp;&amp; Signal</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <property name="spacing">
@@ -498,6 +498,111 @@
               <property name="icon">
                <iconset resource="resources.qrc">
                 <normaloff>:/icons/res/edgefalling.png</normaloff>:/icons/res/edgefalling.png</iconset>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="diffToolButton">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>31</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>31</width>
+                <height>31</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Differentiate Input</string>
+              </property>
+              <property name="text">
+               <string>df</string>
+              </property>
+              <property name="icon">
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/processdiff.png</normaloff>:/icons/res/processdiff.png</iconset>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="listenSignalToolButton">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>31</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>31</width>
+                <height>31</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Listen Input Signal</string>
+              </property>
+              <property name="text">
+               <string>Hs</string>
+              </property>
+              <property name="icon">
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/playsignal.png</normaloff>:/icons/res/playsignal.png</iconset>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="listenRelayToolButton">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>31</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>31</width>
+                <height>31</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>Listen Relay Signal</string>
+              </property>
+              <property name="text">
+               <string>Hr</string>
+              </property>
+              <property name="icon">
+               <iconset resource="resources.qrc">
+                <normaloff>:/icons/res/playrelay.png</normaloff>:/icons/res/playrelay.png</iconset>
               </property>
               <property name="checkable">
                <bool>true</bool>
@@ -965,28 +1070,6 @@
            </layout>
           </item>
          </layout>
-        </widget>
-       </item>
-       <item alignment="Qt::AlignTop">
-        <widget class="QPushButton" name="listenButton">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>Listen</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="checked">
-          <bool>false</bool>
-         </property>
-         <property name="flat">
-          <bool>false</bool>
-         </property>
         </widget>
        </item>
        <item>

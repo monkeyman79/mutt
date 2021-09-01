@@ -17,5 +17,9 @@
         <file>res/triggeroff.png</file>
         <file>res/triggersingle.png</file>
         <file>res/triggerstop.png</file>
+        <file>res/triggerstop.png</file>
+        <file>res/processdiff.png</file>
+        <file>res/playsignal.png</file>
+        <file>res/playrelay.png</file>
     </qresource>
 </RCC>

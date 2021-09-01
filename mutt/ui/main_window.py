@@ -7,7 +7,7 @@ from typing import Optional
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication, QMainWindow, QToolButton
 
-from .scope_scene import ScopeScene, TriggerEdge, TriggerMode
+from .scope_scene import ScopeSceneSignal, ScopeScene, TriggerEdge, TriggerMode
 from .main_window_ui import Ui_ScopeWindow
 from ..audio import AudioSource, PyAudioSource
 
@@ -148,11 +148,23 @@ class MUTTMainWindow(QMainWindow):
         self.prev_horiz_dial = value
         self.showHorizPosition()
 
-    def listenButtonClicked(self):
-        if self.ui.listenButton.isChecked():
+    def listenSignalButtonClicked(self):
+        self.ui.listenRelayToolButton.setChecked(False)
+        if self.ui.listenSignalToolButton.isChecked():
+            self.scene.playRelay = False
             result = self.scene.audio_source.start_listening()
             if not result:
-                self.ui.listenButton.setChecked(False)
+                self.ui.listenSignalToolButton.setChecked(False)
+        else:
+            self.scene.audio_source.stop_listening()
+
+    def listenRelayButtonClicked(self):
+        self.ui.listenSignalToolButton.setChecked(False)
+        if self.ui.listenRelayToolButton.isChecked():
+            self.scene.playRelay = True
+            result = self.scene.audio_source.start_listening()
+            if not result:
+                self.ui.listenRelayToolButton.setChecked(False)
         else:
             self.scene.audio_source.stop_listening()
 
@@ -210,7 +222,11 @@ class MUTTMainWindow(QMainWindow):
                 self.horizPositionChanged)
         self.ui.pulseScaleDial.valueChanged.connect(
                 self.pulseScaleDialChanged)
-        self.ui.listenButton.clicked.connect(self.listenButtonClicked)
+
+        self.ui.listenSignalToolButton.clicked.connect(
+                self.listenSignalButtonClicked)
+        self.ui.listenRelayToolButton.clicked.connect(
+                self.listenRelayButtonClicked)
 
         self.triggerModeButtons = {
             TriggerMode.Off: self.ui.offToolButton,
@@ -247,7 +263,8 @@ class MUTTMainWindow(QMainWindow):
                 ScopeScene.displayTriggerLines: self.ui.displayTriggerButton,
                 ScopeScene.displayGrid: self.ui.displayGridButton,
                 ScopeScene.displayPulseImage: self.ui.displayPulseButton,
-                ScopeScene.displayPulseGraph: self.ui.displayPulseGraphButton
+                ScopeScene.displayPulseGraph: self.ui.displayPulseGraphButton,
+                ScopeSceneSignal.diffInput: self.ui.diffToolButton
                 }.items():
             self.bindBoolPropertyButton(button, self.scene, prop)
 

@@ -89,8 +89,9 @@ class PyAudioSource(AudioSource):
     def start_listening(self) -> bool:
         if self.output_stream is None:
             return False
-        self._listening = True
-        self.output_stream.start_stream()
+        if not self._listening:
+            self.output_stream.start_stream()
+            self._listening = True
         return True
 
     def stop_listening(self):

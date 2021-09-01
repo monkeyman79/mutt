@@ -403,10 +403,12 @@ class ScopeSceneSignal(ScopeScene):
         self.relay_data = -1 * np.ones(self.AUDIO_BUFFER_SIZE, np.int8)
         self._trigger_mode = TriggerMode.Normal
         self._force_trigger = False
-        self.highLevel = 250
-        self.lowLevel = -250
+        self._high_level = 250
+        self._low_level = -250
         self.relay_count = 0
         self.pulse_count = 0
+        self._diff_input = False
+        self._play_relay = False
 
         self.trigger_mode_changed_callback: Optional[Callable] = None
         self.update_callback: Optional[Callable] = None
@@ -415,6 +417,8 @@ class ScopeSceneSignal(ScopeScene):
     def connect_audio(self, audio_source: AudioSource):
         self.audio_source = audio_source
         self.chunk_range = np.arange(audio_source.CHUNK_SIZE + 1)
+        self.prev_data_in = np.zeros(audio_source.CHUNK_SIZE, np.int16)
+        self.raw_relay_data = np.zeros(audio_source.CHUNK_SIZE, np.int16)
         self.audio_source.connect_data_ready(self.process_audio_data)
 
     def connect_trigger_mode_changed(self, callback: Callable):
@@ -609,20 +613,30 @@ class ScopeSceneSignal(ScopeScene):
         # Move data in buffer append new chunk
         relay_data[0:-chunk_size] = relay_data[chunk_size:]
         relay_data[-chunk_size:] = result[1:]
-        return result[1:]
+        self.raw_relay_data[:] = result[1:] * 8192
 
     def process_audio_data(self, audio_source: AudioSource):
         chunk_size = audio_source.CHUNK_SIZE
         audio_data = self.audio_data
 
-        data_in, overflow = audio_source.get_buffer()
+        raw_data_in, overflow = audio_source.get_buffer()
+        if self._diff_input:
+            data_in = np.diff(np.concatenate(
+                    (self.prev_data_in[-1:], raw_data_in)))
+        else:
+            data_in = raw_data_in
+        self.prev_data_in[:] = raw_data_in
+
         # Move data in audio buffer and append new chunk
         audio_data[0:-chunk_size] = audio_data[chunk_size:]
         audio_data[-chunk_size:] = data_in
         self.fft_graph_data[:] = self.fft_graph_data[:] / 2
         self.fft_tex_data[:] = self.fft_tex_data[:] / 2
         self.update_relay_data(audio_source, data_in)
-        audio_source.write_output(data_in)
+        if self._play_relay:
+            audio_source.write_output(self.raw_relay_data)
+        else:
+            audio_source.write_output(data_in)
         self.process_triggering()
         if self._display_fft_image or self._display_fft_graph:
             self.update_fft_data()
@@ -646,3 +660,19 @@ class ScopeSceneSignal(ScopeScene):
         elif int_value < -self.AUDIO_BUFFER_SIZE // 2:
             int_value = -self.AUDIO_BUFFER_SIZE // 2
         self._display_position = int_value
+
+    @property
+    def diffInput(self) -> bool:
+        return self._diff_input
+
+    @diffInput.setter
+    def diffInput(self, value: bool):
+        self._diff_input = value
+
+    @property
+    def playRelay(self) -> bool:
+        return self._play_relay
+
+    @playRelay.setter
+    def playRelay(self, value: bool):
+        self._play_relay = value
