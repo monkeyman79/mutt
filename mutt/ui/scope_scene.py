@@ -5,7 +5,7 @@ import numpy as np
 import moderngl
 
 from ..audio import AudioSource
-from .shaders import SignalVA, GridVA, LineVA, FFTTextureVA
+from .shaders import SignalVA, GridVA, LineVA, TextureVA
 
 
 class TriggerEdge(IntEnum):
@@ -26,20 +26,26 @@ class ScopeScene:
     MAX_VERTEX_COUNT = 6250
     # Margin for main scope rectangle
     MARGIN = 0.02
-    # Number of horizontal grid divisons
+    # Number of horizontal grid divisions
     HGRID_DIV = 10
-    # Number of vertical grid divisons
+    # Number of vertical grid divisions
     VGRID_DIV = 8
     # Horizontal resolution for FFT texture
     FFT_WIDTH = 512
     # Vertical resolution for FFT texture
     FFT_HEIGHT = 1024
+    # Horizontal resulution for pulse texture
+    PULSE_TEX_WIDTH = 1024
+    # Vertical resolution for pulse texture
+    PULSE_TEX_HEIGHT = 1024
     # Color of signal graph
     SIGNAL_COLOR = (0.0, 1.0, 1.0, 1.0)
     # Color of relay graph
     RELAY_GRAPH_COLOR = (0.8, 0.8, 0.0, 1.0)
     # Color of fft graph
     FFT_GRAPH_COLOR = (0.8, 0.0, 0.3, 1.0)
+    # Color of pulse graph
+    PULSE_GRAPH_COLOR = (0.8, 0.8, 0.0, 1.0)
     # Color of trigger level line
     TRIGGER_COLOR = (0.9, 0.5, 0.5, 0.8)
     # Color of trigger deadband line
@@ -58,7 +64,7 @@ class ScopeScene:
 
     def __init__(self, initialize: bool = False, ctx: moderngl.Context = None):
         # Number of displayed samples (corresponds to H Scale)
-        self._display_sample_count = ScopeScene.MAX_VERTEX_COUNT
+        self._display_sample_count = ScopeScene.MAX_VERTEX_COUNT // 100
         # Horizontal sample offset (corresponds to H Position)
         self._display_position = 0
         # Enable signal graph
@@ -73,6 +79,10 @@ class ScopeScene:
         self._display_trigger_lines = True
         # Enable grid and frame
         self._display_grid = True
+        # Enable pulse width image
+        self._display_pulse_image = True
+        # Enable pulse width graph
+        self._display_pulse_graph = False
         self._triggered = False
 
         # FFT settings
@@ -81,9 +91,8 @@ class ScopeScene:
 
         # Relay settings
         self._trigger_edge = TriggerEdge.Positive
-        self._trigger_level = 0
-        self._deadband = 0
-        self._deadband_level = 0
+        self._high_level = 0
+        self._low_level = 0
 
         # Snapshot data
         self.snapshot_data = np.zeros(self.SNAPSHOT_SIZE, np.int16)
@@ -93,13 +102,17 @@ class ScopeScene:
         self.fft_tex_data = np.zeros(self.FFT_WIDTH, np.float32)
         self.fft_graph_data = np.zeros(self.FFT_WIDTH, np.int16)
 
+        self.pulse_tex_data = np.zeros(self.PULSE_TEX_WIDTH, np.int16)
+        self._pulse_tex_scale = 32.
+
         self.framebuffer: moderngl.Framebuffer = None
         self.ctx: moderngl.Context = None
 
         self.signal_vao: SignalVA = None    # type: ignore
         self.grid_vao: GridVA = None        # type: ignore
         self.line_vao: LineVA = None        # type: ignore
-        self.fft_vao: FFTTextureVA = None   # type: ignore
+        self.fft_vao: TextureVA = None      # type: ignore
+        self.pulse_vao: TextureVA = None    # type: ignore
         if initialize:
             self.initialize(ctx)
 
@@ -116,8 +129,11 @@ class ScopeScene:
         self.grid_vao = GridVA(self.ctx, main_rect, self.HGRID_DIV,
                                self.VGRID_DIV)
         self.line_vao = LineVA(self.ctx, main_rect)
-        self.fft_vao = FFTTextureVA(self.ctx, main_rect, self.FFT_WIDTH,
-                                    self.FFT_HEIGHT)
+        self.fft_vao = TextureVA(self.ctx, main_rect, self.FFT_WIDTH,
+                                 self.FFT_HEIGHT)
+        self.pulse_vao = TextureVA(self.ctx, main_rect, self.PULSE_TEX_WIDTH,
+                                   self.PULSE_TEX_HEIGHT, True)
+        self.pulse_vao.set_scale(self._pulse_tex_scale)
 
     def clear(self, color=(0, 0, 0, 0)):
         self.ctx.clear(*color)
@@ -153,10 +169,7 @@ class ScopeScene:
             count = self.SNAPSHOT_SIZE - plot_start
 
         if self._display_relay:
-            if self._trigger_edge == TriggerEdge.Positive:
-                multiply = np.int16(8192)
-            else:
-                multiply = np.int16(-8192)
+            multiply = np.int16(8192)
             plot_data = self.relay_snapshot_data[
                 plot_start:plot_start+count].astype('i2') * multiply
             self.signal_vao.render_data(plot_data, count, scale, start,
@@ -169,6 +182,10 @@ class ScopeScene:
     def paint_fft_texture(self):
         self.fft_vao.render_data(self.fft_tex_data)
 
+    def paint_pulse_texture(self):
+        self.pulse_vao.render_data((self.pulse_tex_data / 16384)
+                                   .astype(np.float32))
+
     def paint_grid(self):
         self.grid_vao.render_grid()
 
@@ -177,10 +194,10 @@ class ScopeScene:
 
     def paint_trigger_lines(self):
         self.line_vao.render_hline(
-            self._deadband_level / 32768, self.TRIGGER_ARM_COLOR,
+            self._low_level / 32768, self.TRIGGER_ARM_COLOR,
             self.TRIGGER_SEGMENTS)
         self.line_vao.render_hline(
-            self._trigger_level / 32768, self.TRIGGER_COLOR,
+            self._high_level / 32768, self.TRIGGER_COLOR,
             self.TRIGGER_SEGMENTS)
         if self._triggered:
             trig_pos = -(2 * self._display_position
@@ -195,31 +212,30 @@ class ScopeScene:
             ScopeScene.FFT_WIDTH - 1, ScopeScene.FFT_WIDTH - 1, 0,
             color=self.FFT_GRAPH_COLOR)
 
+    def paint_pulse_graph(self):
+        width = int(ScopeScene.PULSE_TEX_WIDTH / self._pulse_tex_scale)
+        self.signal_vao.render_data(
+            (self.pulse_tex_data[:width] - 32768).astype(np.int16),
+            width, width, 0, color=self.PULSE_GRAPH_COLOR)
+
     def paint(self):
         self.framebuffer.use()
         self.clear()
         if self._display_fft_image:
             self.paint_fft_texture()
+        if self._display_pulse_image:
+            self.paint_pulse_texture()
         if self._display_grid:
             self.paint_grid()
         if self._display_trigger_lines:
             self.paint_trigger_lines()
         if self._display_fft_graph:
             self.paint_fft_graph()
+        if self._display_pulse_graph:
+            self.paint_pulse_graph()
         self.paint_signal_and_relay()
         if self._display_grid:
             self.paint_frame()
-
-    def update_deadband_level(self):
-        if self._trigger_edge == TriggerEdge.Positive:
-            deadband_level = self._trigger_level - self._deadband
-            if deadband_level < -32768:
-                deadband_level = 32768
-        else:
-            deadband_level = self._trigger_level + self._deadband
-            if deadband_level > 32767:
-                deadband_level = 32767
-        self._deadband_level = deadband_level
 
     def forceTrigger(self):
         self._force_trigger = True
@@ -234,13 +250,32 @@ class ScopeScene:
         self._trigger_mode = mode
 
     @property
-    def triggerLevel(self) -> int:
-        return self._trigger_level
+    def highLevel(self) -> int:
+        return self._high_level
 
-    @triggerLevel.setter
-    def triggerLevel(self, level: int):
-        self._trigger_level = level
-        self.update_deadband_level()
+    @highLevel.setter
+    def highLevel(self, level: int):
+        if level > 32767:
+            level = 32767
+        elif level < -32768:
+            level = -32768
+        self._high_level = level
+        if self._low_level > self._high_level:
+            self._low_level = self._high_level
+
+    @property
+    def lowLevel(self):
+        return self._low_level
+
+    @lowLevel.setter
+    def lowLevel(self, level):
+        if level > 32767:
+            level = 32767
+        elif level < -32768:
+            level = -32768
+        self._low_level = level
+        if self._high_level < self._low_level:
+            self._high_level = self._low_level
 
     @property
     def triggerEdge(self) -> TriggerEdge:
@@ -249,16 +284,6 @@ class ScopeScene:
     @triggerEdge.setter
     def triggerEdge(self, edge: TriggerEdge):
         self._trigger_edge = edge
-        self.update_deadband_level()
-
-    @property
-    def deadband(self):
-        return self._deadband
-
-    @deadband.setter
-    def deadband(self, value):
-        self._deadband = value
-        self.update_deadband_level()
 
     @property
     def displayCount(self):
@@ -320,6 +345,35 @@ class ScopeScene:
         self._display_fft_image = value
 
     @property
+    def displayPulseImage(self) -> bool:
+        return self._display_pulse_image
+
+    @displayPulseImage.setter
+    def displayPulseImage(self, value: bool):
+        # Clear old Pulse image data before re-enabling
+        if value:
+            self.pulse_vao.clear()
+        self._display_pulse_image = value
+
+    @property
+    def displayPulseGraph(self) -> bool:
+        return self._display_pulse_graph
+
+    @displayPulseGraph.setter
+    def displayPulseGraph(self, value: bool):
+        self._display_pulse_graph = value
+
+    @property
+    def pulseImageScale(self) -> float:
+        return self._pulse_tex_scale
+
+    @pulseImageScale.setter
+    def pulseImageScale(self, value: float):
+        if self.pulse_vao is not None:
+            self.pulse_vao.set_scale(value)
+        self._pulse_tex_scale = value
+
+    @property
     def displayTriggerLines(self) -> bool:
         return self._display_trigger_lines
 
@@ -349,7 +403,10 @@ class ScopeSceneSignal(ScopeScene):
         self.relay_data = -1 * np.ones(self.AUDIO_BUFFER_SIZE, np.int8)
         self._trigger_mode = TriggerMode.Normal
         self._force_trigger = False
-        self.deadband = 500
+        self.highLevel = 250
+        self.lowLevel = -250
+        self.relay_count = 0
+        self.pulse_count = 0
 
         self.trigger_mode_changed_callback: Optional[Callable] = None
         self.update_callback: Optional[Callable] = None
@@ -358,7 +415,7 @@ class ScopeSceneSignal(ScopeScene):
     def connect_audio(self, audio_source: AudioSource):
         self.audio_source = audio_source
         self.chunk_range = np.arange(audio_source.CHUNK_SIZE + 1)
-        self.audio_source.connect_data_ready(self.update_audio_data)
+        self.audio_source.connect_data_ready(self.process_audio_data)
 
     def connect_trigger_mode_changed(self, callback: Callable):
         self.trigger_mode_changed_callback = callback
@@ -372,41 +429,50 @@ class ScopeSceneSignal(ScopeScene):
     def update_fft_data(self):
         fft_data = np.abs((np.fft.rfft(
             self.audio_data[-self.FFT_CALC_SIZE:])
-            [:ScopeScene.FFT_WIDTH - 1]))
+            [:ScopeScene.FFT_WIDTH]))
         if (self._display_fft_image and self.fft_tex_log
                 or self._display_fft_graph and self.fft_graph_log):
             fft_data2 = np.maximum((
                 np.log((fft_data + 1.)) - 11.) / 4., 0.).astype(np.float32)
             if self.fft_tex_log:
-                self.fft_tex_data = fft_data2
+                self.fft_tex_data[:] = fft_data2
             if self.fft_graph_log:
-                self.fft_graph_data = (
+                self.fft_graph_data[:] = (
                     (fft_data2 - 1) * 32768.).astype(np.int16)
         if (self._display_fft_image and not self.fft_tex_log
                 or self._display_fft_graph and not self.fft_graph_log):
             fft_data2 = (fft_data / (32768. * 512.)).astype('f4')
             if not self.fft_tex_log:
-                self.fft_tex_data = fft_data2
+                self.fft_tex_data[:] = fft_data2
             if not self.fft_graph_log:
-                self.fft_graph_data = (
+                self.fft_graph_data[:] = (
                     (fft_data2 - 1) * 32768.).astype(np.int16)
 
     def detect_trigger_edge(self, last_value: int, arrange: np.ndarray,
                             first: bool = False) -> int:
 
+        if self._trigger_edge == TriggerEdge.Positive:
+            trigger = 1
+            fmin = np.argmin
+            fmax = np.argmax
+        else:
+            trigger = -1
+            fmin = np.argmax
+            fmax = np.argmin
+
         if first:
             sidx: int = 0
-            if last_value != -1:
+            if last_value != -trigger:
                 # was not armed initially - find first element 'below'
-                sidx = cast(int, np.argmin(arrange))
+                sidx = cast(int, fmin(arrange))
                 # sidx will be 0 if either first element is below or none
-                if sidx == 0 and arrange[0] != -1:
+                if sidx == 0 and arrange[0] != -trigger:
                     return -1
 
             # find first element 'above'
-            idx = np.argmax(arrange[sidx:])
+            idx = fmax(arrange[sidx:])
             # idx will be 0 if either first element is above or no elements
-            if arrange[sidx + idx] != 1:
+            if arrange[sidx + idx] != trigger:
                 return -1
             return cast(int, sidx + idx)
 
@@ -419,18 +485,18 @@ class ScopeSceneSignal(ScopeScene):
             if crrange[0] == 0:
                 return -1
 
-            if crrange[0] == -1:
+            if crrange[0] == -trigger:
                 # last element is 'below', find last 'above'
-                sidx = cast(int, np.argmax(crrange))
+                sidx = cast(int, fmax(crrange))
                 if sidx == 0:
                     # all elements 'below'
                     return -1
 
             # now find last element 'below'
-            idx = np.argmin(crrange[sidx:])
+            idx = fmin(crrange[sidx:])
             if idx == 0:
                 # no 'raising' edge in array and first element is above
-                if last_value == -1:
+                if last_value == -trigger:
                     return 0
                 return -1
 
@@ -484,6 +550,25 @@ class ScopeSceneSignal(ScopeScene):
             self.relay_snapshot_data[:] = self.relay_data[
                     copy_start:copy_start + max_screen]
 
+    def process_pulse_data(self, pulse_widths):
+        if self._display_pulse_image or self._display_pulse_graph:
+            # self.pulse_tex_data[:] = self.pulse_tex_data[:] >> 1
+            self.pulse_tex_data[:] = 0
+        if self._trigger_edge == TriggerEdge.Positive:
+            trigger = 1
+        else:
+            trigger = -1
+        for val, pos in pulse_widths:
+            if val != trigger:
+                self.pulse_count = pos
+            else:
+                pos += self.pulse_count
+                # TODO use shader for this
+                if self._display_pulse_image or self._display_pulse_graph:
+                    if pos < len(self.pulse_tex_data):
+                        self.pulse_tex_data[pos] = min(
+                            self.pulse_tex_data[pos] + 1024, 16384)
+
     def update_relay_data(self, audio_source: AudioSource,
                           data_in: np.ndarray):
         chunk_size = audio_source.CHUNK_SIZE
@@ -494,30 +579,39 @@ class ScopeSceneSignal(ScopeScene):
         relay_chunk = np.zeros(chunk_size + 1, dtype=np.int8)
         relay_chunk[0] = relay_data[-1]
 
-        if self._trigger_edge == TriggerEdge.Positive:
-            trigger_op: Callable = np.greater
-            arm_op: Callable = np.less
-        else:
-            trigger_op = np.less
-            arm_op = np.greater
-
         # Put relay state for each sample in the buffer
-        np.subtract(one * trigger_op(data_in, self._trigger_level),
-                    one * arm_op(data_in, self._deadband_level),
+        np.subtract(one * np.greater(data_in, self._high_level),
+                    one * np.less(data_in, self._low_level),
                     out=relay_chunk[1:], dtype=np.int8)
 
         # https://stackoverflow.com/questions/68869535/numpy-accumulate-greater-operation
         # Process hysteresis on the chunk
         masked_indexes = np.where((relay_chunk != 0), self.chunk_range, 0)
         hyst_indexes = np.maximum.accumulate(masked_indexes)
-        result = relay_chunk[hyst_indexes][1:]
+        result = relay_chunk[hyst_indexes]
+
+        # Get indexes where relay value changes
+        indexes = np.nonzero(np.diff(result))[0]
+        if len(indexes) > 0:
+            indexes2 = np.insert(indexes, 0, 0)
+            widths = np.diff(indexes2)
+            widths[0] += self.relay_count
+            self.relay_count = chunk_size - indexes[-1]
+            # self.trigger_indexes = np.stack((result[indexes],
+            #                                  indexes)).transpose()
+            self.pulse_data = np.stack((result[indexes],
+                                        widths)).transpose()
+        else:
+            # self.trigger_indexes = np.ndarray((0, 2))
+            self.pulse_data = np.ndarray((0, 2))
+        self.process_pulse_data(self.pulse_data)
 
         # Move data in buffer append new chunk
         relay_data[0:-chunk_size] = relay_data[chunk_size:]
-        relay_data[-chunk_size:] = result
-        return result
+        relay_data[-chunk_size:] = result[1:]
+        return result[1:]
 
-    def update_audio_data(self, audio_source: AudioSource):
+    def process_audio_data(self, audio_source: AudioSource):
         chunk_size = audio_source.CHUNK_SIZE
         audio_data = self.audio_data
 
@@ -525,6 +619,8 @@ class ScopeSceneSignal(ScopeScene):
         # Move data in audio buffer and append new chunk
         audio_data[0:-chunk_size] = audio_data[chunk_size:]
         audio_data[-chunk_size:] = data_in
+        self.fft_graph_data[:] = self.fft_graph_data[:] / 2
+        self.fft_tex_data[:] = self.fft_tex_data[:] / 2
         self.update_relay_data(audio_source, data_in)
         audio_source.write_output(data_in)
         self.process_triggering()

@@ -4,6 +4,8 @@
         <file>res/displayfftgraph.png</file>
         <file>res/displayffttex.png</file>
         <file>res/displaygrid.png</file>
+        <file>res/displaypulse.png</file>
+        <file>res/displaypulsegraph.png</file>
         <file>res/displayrelay.png</file>
         <file>res/displaysignal.png</file>
         <file>res/displaytrigger.png</file>

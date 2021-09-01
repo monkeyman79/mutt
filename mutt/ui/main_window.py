@@ -13,15 +13,15 @@ from ..audio import AudioSource, PyAudioSource
 
 
 class MUTTMainWindow(QMainWindow):
-    LOG_DIAL_VALS = [1, 2, 5]
+    LOG_DIAL_VALUES = [1, 2, 5]
     TRIGGER_LEVEL_CHANGE = 50
 
     def __init__(self, audio=None):
         super().__init__()
         self.activeTriggerModeButton: Optional[QToolButton]
         self.activeTriggerEdgeButton: Optional[QToolButton]
-        self.prev_trigger_dial = 0
-        self.prev_deadband_dial = 0
+        self.prev_high_level_dial = 0
+        self.prev_low_level_dial = 0
         self.prev_horiz_dial = 0
         self.initUi()
         if audio is not None:
@@ -40,13 +40,14 @@ class MUTTMainWindow(QMainWindow):
             diff -= 1
         return diff
 
-    def showTriggerLevel(self):
-        self.ui.triggerLevelEdit.setText(str(self.scene.triggerLevel))
+    def showLevels(self):
+        self.ui.highLevelEdit.setText(str(self.scene.highLevel))
+        self.ui.lowLevelEdit.setText(str(self.scene.lowLevel))
 
-    def triggerLevelDialChanged(self):
-        value = self.ui.triggerLevelDial.value()
-        diff = self.dialDiff(value, self.prev_trigger_dial)
-        level = self.scene.triggerLevel
+    def highLevelDialChanged(self):
+        value = self.ui.highLevelDial.value()
+        diff = self.dialDiff(value, self.prev_high_level_dial)
+        level = self.scene.highLevel
         modifiers = QApplication.keyboardModifiers()
         if (modifiers & QtCore.Qt.ShiftModifier) == QtCore.Qt.ShiftModifier:
             tick = 1
@@ -56,21 +57,14 @@ class MUTTMainWindow(QMainWindow):
                 == QtCore.Qt.ControlModifier):
             tick = 5 * tick
         level += diff * tick
-        if level > 32767:
-            level = 32767
-        elif level < -32768:
-            level = -32768
-        self.scene.triggerLevel = level
-        self.prev_trigger_dial = value
-        self.showTriggerLevel()
+        self.scene.highLevel = level
+        self.prev_high_level_dial = value
+        self.showLevels()
 
-    def showDeadband(self):
-        self.ui.deadbandLineEdit.setText(str(self.scene.deadband))
-
-    def deadbandDialChanged(self):
-        value = self.ui.deadbandDial.value()
-        diff = self.dialDiff(value, self.prev_deadband_dial)
-        deadband = self.scene.deadband
+    def lowLevelDialChanged(self):
+        value = self.ui.lowLevelDial.value()
+        diff = self.dialDiff(value, self.prev_low_level_dial)
+        level = self.scene.lowLevel
         modifiers = QApplication.keyboardModifiers()
         if (modifiers & QtCore.Qt.ShiftModifier) == QtCore.Qt.ShiftModifier:
             tick = 1
@@ -79,14 +73,10 @@ class MUTTMainWindow(QMainWindow):
         if ((modifiers & QtCore.Qt.ControlModifier)
                 == QtCore.Qt.ControlModifier):
             tick = 5 * tick
-        deadband += diff * tick
-        if deadband > 65535:
-            deadband = 65535
-        elif deadband < 0:
-            deadband = 0
-        self.scene.deadband = deadband
-        self.prev_deadband_dial = value
-        self.showDeadband()
+        level += diff * tick
+        self.scene.lowLevel = level
+        self.prev_low_level_dial = value
+        self.showLevels()
 
     def showHorizScale(self):
         if self.scene.audio_source is not None:
@@ -103,10 +93,26 @@ class MUTTMainWindow(QMainWindow):
 
     def horizScaleChanged(self):
         value = self.ui.horizScaleDial.value()
-        divisor = self.LOG_DIAL_VALS[value % 3] * 10 ** (value // 3)
+        divisor = self.LOG_DIAL_VALUES[value % 3] * 10 ** (value // 3)
         sample_count = int(round(ScopeScene.MAX_VERTEX_COUNT / divisor))
         self.scene.displayCount = sample_count
         self.showHorizScale()
+
+    def showPulseScale(self):
+        if self.scene.audio_source is not None:
+            freq = self.scene.audio_source.FREQ
+        else:
+            freq = AudioSource.FREQ
+        scale = self.scene.pulseImageScale
+        screen_time = (1000000 * self.scene.PULSE_TEX_WIDTH /
+                       (freq * scale * ScopeScene.HGRID_DIV))
+        self.ui.pulseScaleEdit.setText(str(screen_time) + " us")
+
+    def pulseScaleDialChanged(self):
+        value = self.ui.pulseScaleDial.value()
+        scale = 1 << value
+        self.scene.pulseImageScale = scale
+        self.showPulseScale()
 
     def showHorizPosition(self):
         if self.scene.audio_source is not None:
@@ -194,15 +200,16 @@ class MUTTMainWindow(QMainWindow):
         self.ui = Ui_ScopeWindow()
         self.ui.setupUi(self)
         self.scene = self.ui.scopeWidget.scene
-        self.ui.triggerLevelDial.valueChanged.connect(
-                self.triggerLevelDialChanged)
-        self.ui.deadbandDial.valueChanged.connect(
-                self.deadbandDialChanged)
+        self.ui.highLevelDial.valueChanged.connect(
+                self.highLevelDialChanged)
+        self.ui.lowLevelDial.valueChanged.connect(
+                self.lowLevelDialChanged)
         self.ui.horizScaleDial.valueChanged.connect(
                 self.horizScaleChanged)
-        self.ui.horizScaleLineEdit.setText("10 ms")
         self.ui.horizPositionDial.valueChanged.connect(
                 self.horizPositionChanged)
+        self.ui.pulseScaleDial.valueChanged.connect(
+                self.pulseScaleDialChanged)
         self.ui.listenButton.clicked.connect(self.listenButtonClicked)
 
         self.triggerModeButtons = {
@@ -238,15 +245,21 @@ class MUTTMainWindow(QMainWindow):
                 ScopeScene.displayFFTImage: self.ui.displayFFTImageButton,
                 ScopeScene.displayFFTGraph: self.ui.displayFFTGraphButton,
                 ScopeScene.displayTriggerLines: self.ui.displayTriggerButton,
-                ScopeScene.displayGrid: self.ui.displayGridButton}.items():
+                ScopeScene.displayGrid: self.ui.displayGridButton,
+                ScopeScene.displayPulseImage: self.ui.displayPulseButton,
+                ScopeScene.displayPulseGraph: self.ui.displayPulseGraphButton
+                }.items():
             self.bindBoolPropertyButton(button, self.scene, prop)
 
         self.ui.scopeWidget.audioOverflowSignal.connect(self.audioOverflowSlot)
 
-        self.showTriggerLevel()
-        self.showDeadband()
+        self.showLevels()
         self.showHorizScale()
         self.showHorizPosition()
+        self.showPulseScale()
+
+        self.ui.horizScaleDial.setValue(6)
+        self.ui.pulseScaleDial.setValue(5)
 
 
 def Run():

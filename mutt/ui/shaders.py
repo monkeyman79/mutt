@@ -104,7 +104,9 @@ _TEXTURE_VERTEX_SHADER = '''
     #version 330
 
     uniform mat4 MainRect;
+    uniform mat2 TexScale;
     uniform int TexOffset;
+    uniform int Height;
 
     in vec2 in_vert;
     in vec2 in_texcoord;
@@ -112,7 +114,8 @@ _TEXTURE_VERTEX_SHADER = '''
     out vec2 v_texcoord;
 
     void main() {
-        v_texcoord = in_texcoord - vec2(0, TexOffset / 1024.);
+        v_texcoord = (in_texcoord - vec2(0, float(TexOffset) / Height))
+                     * TexScale;
         gl_Position = vec4(in_vert[0], in_vert[1], 0.0, 1.0) * MainRect;
     }
 '''
@@ -121,6 +124,7 @@ _TEXTURE_FRAGMENT_SHADER = '''
     #version 330
 
     uniform sampler2D Texture;
+    uniform bool AltPalette;
 
     in vec2 v_texcoord;
     out vec4 f_color;
@@ -129,8 +133,20 @@ _TEXTURE_FRAGMENT_SHADER = '''
         return vec4(v*v, v*v*v, v*(1-v)+v*v*v, 1.);
     }
 
+    vec4 alt_palette(float v) {
+        return vec4(v, v, v*v*v*v, v);
+    }
+
     void main() {
-        f_color = palette(texture(Texture, v_texcoord)[0]);
+        float val = texture(Texture, v_texcoord)[0];
+        if (AltPalette) {
+            f_color = alt_palette(val);
+        }
+        else {
+            f_color = palette(val);
+        }
+        if (f_color.a < 0.1)
+            discard;
     }
 '''
 
@@ -246,10 +262,11 @@ class LineVA(VertexArrayWrapper):
         self.render_line((x, -1), (x, 1), color, segments)
 
 
-class FFTTextureVA(VertexArrayWrapper):
+class TextureVA(VertexArrayWrapper):
 
     def __init__(self, ctx: moderngl.Context, main_rect: np.ndarray,
-                 width: int, height: int):
+                 width: int, height: int,
+                 alt_palette: bool = False):
         program = ctx.program(
             vertex_shader=_TEXTURE_VERTEX_SHADER,
             fragment_shader=_TEXTURE_FRAGMENT_SHADER)
@@ -265,6 +282,9 @@ class FFTTextureVA(VertexArrayWrapper):
         super().__init__(ctx, program,
                          [(self.buffer, '2f4 2f4', 'in_vert', 'in_texcoord')],
                          main_rect)
+        self.program['Height'] = height
+        self.program['TexScale'] = (1, 0, 0, 1)
+        self.program['AltPalette'] = alt_palette
         self.mode = moderngl.TRIANGLE_STRIP
         self.texture = ctx.texture((width, height), 1, dtype='f4')
         # self.texture.filter = moderngl.NEAREST, moderngl.NEAREST
@@ -281,6 +301,9 @@ class FFTTextureVA(VertexArrayWrapper):
         self.program['TexOffset'] = self.position
         super().render()
         self.position = (self.position + 1) % self.height
+
+    def set_scale(self, scale_x: float):
+        self.program['TexScale'] = (1 / scale_x, 0, 0, 1)
 
     def clear(self):
         self.texture_buffer.clear()
