@@ -1,6 +1,7 @@
 from typing import Tuple
 import numpy as np
-
+import os
+import os.path
 
 class Format:
     @property
@@ -49,17 +50,25 @@ class TurboTapeFormat(Format):
         return self.WIDTHS
 
     def error(self, text: str):
-        msg = text
-        if self.data_size != 0:
-            msg = "{} at {:04X}".format(text, self.pointer + self.start_addr)
+        self.print_progress()
         print("")
-        print("Error: %s" % msg)
+        print("Error: %s" % text)
         self.data_size = 0
         self.state = self.SYNCING_BITS
 
     def success(self):
+        self.print_progress()
+        print("")
         print("OK")
-        with open(self.unicode_file_name + ".prg", "wb") as file:
+        illegal='/?<>\\:*|^"\''
+        file_name = "".join([char
+            for char in self.unicode_file_name
+            if ord(char) >= 32 and char not in illegal]).strip()
+        output = "output"
+        if not os.path.isdir(output):
+            os.mkdir(output)
+        file_path = output + os.sep + file_name
+        with open(file_path + ".prg", "wb") as file:
             file.write(self.start_addr.to_bytes(2, 'little'))
             file.write(self.data)
         self.state = self.SYNCING_BITS
@@ -75,15 +84,16 @@ class TurboTapeFormat(Format):
         self.data_size = self.end_addr - self.start_addr
 
     def print_progress(self):
-        print("{:16s} {:04X} {:04X} {:04X}".format(
-            self.unicode_file_name, self.start_addr, self.end_addr,
-            self.start_addr + self.pointer), end='\r')
+        if self.data_size != 0:
+            print("\r{:16s} {:04X} {:04X} {:04X}".format(
+                self.unicode_file_name, self.start_addr, self.end_addr,
+                self.start_addr + self.pointer), end='')
 
     def process_file(self, checksum):
         sum = np.bitwise_xor.reduce(self.data)
         if sum != checksum:
-            print("checksum {:x}!={:x}".format(sum, checksum))
             self.error("LOAD ERROR")
+            # print("checksum {:x}!={:x}".format(sum, checksum))
         else:
             self.success()
         self.data_size = 0
@@ -147,7 +157,7 @@ class TurboTapeFormat(Format):
 
         self.data[self.pointer] = self.byte
         self.pointer += 1
-        if self.pointer % 256 == 0:
+        if self.pointer % 16 == 0:
             self.print_progress()
 
     def process_input(self, cycles_us: np.ndarray):

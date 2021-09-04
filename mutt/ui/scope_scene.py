@@ -118,7 +118,7 @@ class ScopeScene:
         self.pulse_vao: TextureVA = None    # type: ignore
         self.format_vao: TextureVA = None   # type: ignore
         if initialize:
-            self.initialize(ctx)
+           self.initialize(ctx)
 
     def initialize(self, ctx: moderngl.Context):
         if ctx is not None:
@@ -130,9 +130,9 @@ class ScopeScene:
         main_rect = self.scale_matrix(1 - self.MARGIN, 1 - self.MARGIN)
 
         self.signal_vao = SignalVA(self.ctx, main_rect, self.MAX_VERTEX_COUNT)
+        self.line_vao = LineVA(self.ctx, main_rect)
         self.grid_vao = GridVA(self.ctx, main_rect, self.HGRID_DIV,
                                self.VGRID_DIV)
-        self.line_vao = LineVA(self.ctx, main_rect)
         self.fft_vao = TextureVA(self.ctx, main_rect, self.FFT_WIDTH,
                                  self.FFT_HEIGHT)
         self.pulse_vao = TextureVA(self.ctx, main_rect, self.PULSE_TEX_WIDTH,

@@ -205,7 +205,7 @@ class GridVA(VertexArrayWrapper):
     # Color for frame, center lines and ticks
     FRAME_COLOR = (0.8, 0.8, 0.8, 1.0)
     # Number of segments of grid lines
-    GRID_SEGMENTS = 301
+    GRID_SEGMENTS = 101
 
     def __init__(self, ctx: moderngl.Context, main_rect: np.ndarray,
                  horizontal_div: int, vertical_div: int):
@@ -226,6 +226,7 @@ class GridVA(VertexArrayWrapper):
         self.program['Segments'] = segments
         segs = segments // 2 + 1 if not ticks else 1
         super().render(vertices=segs, instances=hcount + vcount + 2)
+        # super().render(vertices=segs, instances=1)
 
     def render_grid(self):
         # Render basic grid
