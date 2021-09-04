@@ -7,6 +7,9 @@ import moderngl
 from ..audio import AudioSource
 from .shaders import SignalVA, GridVA, LineVA, TextureVA
 
+# TODO temporary
+from ..tape.format import TurboTapeFormat
+
 
 class TriggerEdge(IntEnum):
     Positive = 0
@@ -113,6 +116,7 @@ class ScopeScene:
         self.line_vao: LineVA = None        # type: ignore
         self.fft_vao: TextureVA = None      # type: ignore
         self.pulse_vao: TextureVA = None    # type: ignore
+        self.format_vao: TextureVA = None   # type: ignore
         if initialize:
             self.initialize(ctx)
 
@@ -132,8 +136,11 @@ class ScopeScene:
         self.fft_vao = TextureVA(self.ctx, main_rect, self.FFT_WIDTH,
                                  self.FFT_HEIGHT)
         self.pulse_vao = TextureVA(self.ctx, main_rect, self.PULSE_TEX_WIDTH,
-                                   self.PULSE_TEX_HEIGHT, True)
+                                   self.PULSE_TEX_HEIGHT, 1)
         self.pulse_vao.set_scale(self._pulse_tex_scale)
+        self.format_vao = TextureVA(self.ctx, main_rect, self.PULSE_TEX_WIDTH,
+                                    1, 2)
+        self.format_vao.set_scale(self._pulse_tex_scale)
 
     def clear(self, color=(0, 0, 0, 0)):
         self.ctx.clear(*color)
@@ -183,6 +190,7 @@ class ScopeScene:
         self.fft_vao.render_data(self.fft_tex_data)
 
     def paint_pulse_texture(self):
+        self.format_vao.render()
         self.pulse_vao.render_data((self.pulse_tex_data / 16384)
                                    .astype(np.float32))
 
@@ -371,6 +379,8 @@ class ScopeScene:
     def pulseImageScale(self, value: float):
         if self.pulse_vao is not None:
             self.pulse_vao.set_scale(value)
+        if self.format_vao is not None:
+            self.format_vao.set_scale(value)
         self._pulse_tex_scale = value
 
     @property
@@ -396,7 +406,7 @@ class ScopeSceneSignal(ScopeScene):
     FFT_CALC_SIZE = 4096
 
     def __init__(self, initialize: bool = False, ctx: moderngl.Context = None):
-        super().__init__(initialize, ctx)
+        super().__init__(False, ctx)
         self.audio_source: Optional[AudioSource] = None
         self._auto_count = 0
         self.audio_data = np.zeros(self.AUDIO_BUFFER_SIZE, np.int16)
@@ -405,14 +415,37 @@ class ScopeSceneSignal(ScopeScene):
         self._force_trigger = False
         self._high_level = 250
         self._low_level = -250
-        self.relay_count = 0
-        self.pulse_count = 0
+        self._relay_count = 0
+        self._pulse_count = 0
         self._diff_input = False
         self._play_relay = False
+        self._speed_correction = 0
+        self._start_level = 0
+        self._pulse_data: np.ndarray = cast(np.ndarray, None)
+        self._tape_format = TurboTapeFormat()
 
         self.trigger_mode_changed_callback: Optional[Callable] = None
         self.update_callback: Optional[Callable] = None
         self.input_overflow_callback: Optional[Callable] = None
+
+        if initialize:
+            self.initialize(ctx)
+
+    def initialize(self, ctx: moderngl.Context):
+        super().initialize(ctx)
+        if self._tape_format is not None:
+            self.update_tape_format()
+
+    def update_tape_format(self):
+        if self.format_vao is None or self.audio_source is None:
+            return
+        data = np.zeros(self.PULSE_TEX_WIDTH, dtype=np.float32)
+        freq = self.audio_source.FREQ
+        for pulse_width in self._tape_format.pulse_widths:
+            samples_count = int(np.rint(pulse_width * freq / 1000000))
+            if samples_count < self.PULSE_TEX_WIDTH:
+                data[samples_count] = 1.
+        self.format_vao.write_data(data)
 
     def connect_audio(self, audio_source: AudioSource):
         self.audio_source = audio_source
@@ -420,6 +453,7 @@ class ScopeSceneSignal(ScopeScene):
         self.prev_data_in = np.zeros(audio_source.CHUNK_SIZE, np.int16)
         self.raw_relay_data = np.zeros(audio_source.CHUNK_SIZE, np.int16)
         self.audio_source.connect_data_ready(self.process_audio_data)
+        self.update_tape_format()
 
     def connect_trigger_mode_changed(self, callback: Callable):
         self.trigger_mode_changed_callback = callback
@@ -554,66 +588,92 @@ class ScopeSceneSignal(ScopeScene):
             self.relay_snapshot_data[:] = self.relay_data[
                     copy_start:copy_start + max_screen]
 
-    def process_pulse_data(self, pulse_widths):
-        if self._display_pulse_image or self._display_pulse_graph:
-            # self.pulse_tex_data[:] = self.pulse_tex_data[:] >> 1
+    def process_pulse_data_us(self, start_level: int,
+                              pulse_widths_us: np.ndarray):
+        pass
+
+    def process_cycle_data_us(self, cycle_width_us: np.ndarray):
+        if self._tape_format:
+            self._tape_format.process_input(cycle_width_us)
+
+    def process_pulse_data(self, start_level: int, pulse_widths: np.ndarray):
+        if len(pulse_widths) == 0:
             self.pulse_tex_data[:] = 0
+            return
         if self._trigger_edge == TriggerEdge.Positive:
             trigger = 1
         else:
             trigger = -1
-        for val, pos in pulse_widths:
-            if val != trigger:
-                self.pulse_count = pos
-            else:
-                pos += self.pulse_count
-                # TODO use shader for this
-                if self._display_pulse_image or self._display_pulse_graph:
-                    if pos < len(self.pulse_tex_data):
-                        self.pulse_tex_data[pos] = min(
-                            self.pulse_tex_data[pos] + 1024, 16384)
+
+        assert self.audio_source is not None
+        multiplier = 1000000 / self.audio_source.FREQ
+
+        if start_level == trigger:
+            count = len(pulse_widths) // 2
+            relay_widths = (pulse_widths[:2 * count:2]
+                            + pulse_widths[1:2 * count:2])
+        else:
+            count = (len(pulse_widths) - 1) // 2 + 1
+            relay_widths = np.ndarray(count, dtype=int)
+            relay_widths[0] = self._pulse_count + pulse_widths[0]
+            relay_widths[1:] = (pulse_widths[1:(2 * count - 1):2]
+                                + pulse_widths[2:(2 * count - 1):2])
+        self._pulse_count = pulse_widths[-1]
+        if self._display_pulse_image or self._display_pulse_graph:
+            # self.pulse_tex_data[:] = self.pulse_tex_data[:] >> 1
+            tex_data = np.bincount(np.minimum(relay_widths,
+                                   self.PULSE_TEX_WIDTH + 1))
+            copy_length = min(len(tex_data), self.PULSE_TEX_WIDTH)
+            self.pulse_tex_data[:copy_length] = np.minimum(
+                    tex_data[:copy_length], 1) * 16384
+            self.pulse_tex_data[copy_length:] = 0
+        self.process_pulse_data_us(start_level, pulse_widths * multiplier)
+        self.process_cycle_data_us(relay_widths * multiplier)
 
     def update_relay_data(self, audio_source: AudioSource,
                           data_in: np.ndarray):
         chunk_size = audio_source.CHUNK_SIZE
         relay_data = self.relay_data
-        one = np.int8(1)
 
         # Put last relay condition at the beginning of buffer to process
         relay_chunk = np.zeros(chunk_size + 1, dtype=np.int8)
         relay_chunk[0] = relay_data[-1]
 
         # Put relay state for each sample in the buffer
-        np.subtract(one * np.greater(data_in, self._high_level),
-                    one * np.less(data_in, self._low_level),
-                    out=relay_chunk[1:], dtype=np.int8)
+        np.subtract(np.greater(data_in, self._high_level).astype(np.int8),
+                    np.less(data_in, self._low_level).astype(np.int8),
+                    out=relay_chunk[1:])
 
         # https://stackoverflow.com/questions/68869535/numpy-accumulate-greater-operation
         # Process hysteresis on the chunk
         masked_indexes = np.where((relay_chunk != 0), self.chunk_range, 0)
         hyst_indexes = np.maximum.accumulate(masked_indexes)
-        result = relay_chunk[hyst_indexes]
+        relay_chunk_hyst = relay_chunk[hyst_indexes]
 
         # Get indexes where relay value changes
-        indexes = np.nonzero(np.diff(result))[0]
+        indexes = np.nonzero(np.diff(relay_chunk_hyst))[0]
         if len(indexes) > 0:
             indexes2 = np.insert(indexes, 0, 0)
             widths = np.diff(indexes2)
-            widths[0] += self.relay_count
-            self.relay_count = chunk_size - indexes[-1]
+            widths[0] += self._relay_count
+            if self._speed_correction != 0:
+                widths = (widths *
+                          (1. + self._speed_correction / 100)).astype(int)
+            self._relay_count = chunk_size - indexes[-1]
             # self.trigger_indexes = np.stack((result[indexes],
             #                                  indexes)).transpose()
-            self.pulse_data = np.stack((result[indexes],
-                                        widths)).transpose()
+            self._start_level = -relay_chunk_hyst[indexes[0]]
+            self._pulse_data = widths
         else:
             # self.trigger_indexes = np.ndarray((0, 2))
-            self.pulse_data = np.ndarray((0, 2))
-        self.process_pulse_data(self.pulse_data)
+            self._pulse_data = np.ndarray(0)
+            self._pulse_count += chunk_size
+        self.process_pulse_data(self._start_level, self._pulse_data)
 
         # Move data in buffer append new chunk
         relay_data[0:-chunk_size] = relay_data[chunk_size:]
-        relay_data[-chunk_size:] = result[1:]
-        self.raw_relay_data[:] = result[1:] * 8192
+        relay_data[-chunk_size:] = relay_chunk_hyst[1:]
+        self.raw_relay_data[:] = relay_chunk_hyst[1:] * 8192
 
     def process_audio_data(self, audio_source: AudioSource):
         chunk_size = audio_source.CHUNK_SIZE
@@ -676,3 +736,11 @@ class ScopeSceneSignal(ScopeScene):
     @playRelay.setter
     def playRelay(self, value: bool):
         self._play_relay = value
+
+    @property
+    def speedCorrection(self) -> int:
+        return self._speed_correction
+
+    @speedCorrection.setter
+    def speedCorrection(self, value: int):
+        self._speed_correction = value

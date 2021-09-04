@@ -98,6 +98,15 @@ class MUTTMainWindow(QMainWindow):
         self.scene.displayCount = sample_count
         self.showHorizScale()
 
+    def showSpeedCorrection(self):
+        corr = self.scene.speedCorrection
+        self.ui.speedCorrectionEdit.setText("{:+} %".format(corr))
+
+    def speedCorrectionDialChanged(self):
+        value = self.ui.speedCorrectionDial.value() * 2
+        self.scene.speedCorrection = value
+        self.showSpeedCorrection()
+
     def showPulseScale(self):
         if self.scene.audio_source is not None:
             freq = self.scene.audio_source.FREQ
@@ -222,6 +231,8 @@ class MUTTMainWindow(QMainWindow):
                 self.horizPositionChanged)
         self.ui.pulseScaleDial.valueChanged.connect(
                 self.pulseScaleDialChanged)
+        self.ui.speedCorrectionDial.valueChanged.connect(
+                self.speedCorrectionDialChanged)
 
         self.ui.listenSignalToolButton.clicked.connect(
                 self.listenSignalButtonClicked)
@@ -274,6 +285,7 @@ class MUTTMainWindow(QMainWindow):
         self.showHorizScale()
         self.showHorizPosition()
         self.showPulseScale()
+        self.showSpeedCorrection()
 
         self.ui.horizScaleDial.setValue(6)
         self.ui.pulseScaleDial.setValue(5)

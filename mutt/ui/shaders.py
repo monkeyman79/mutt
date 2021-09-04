@@ -124,26 +124,33 @@ _TEXTURE_FRAGMENT_SHADER = '''
     #version 330
 
     uniform sampler2D Texture;
-    uniform bool AltPalette;
+    uniform int Palette;
 
     in vec2 v_texcoord;
     out vec4 f_color;
 
-    vec4 palette(float v) {
+    vec4 palette0(float v) {
         return vec4(v*v, v*v*v, v*(1-v)+v*v*v, 1.);
     }
 
-    vec4 alt_palette(float v) {
+    vec4 palette1(float v) {
         return vec4(v, v, v*v*v*v, v);
+    }
+
+    vec4 palette2(float v) {
+        return vec4(v, 0, 0, v);
     }
 
     void main() {
         float val = texture(Texture, v_texcoord)[0];
-        if (AltPalette) {
-            f_color = alt_palette(val);
+        if (Palette == 2) {
+            f_color = palette2(val);
+        }
+        else if (Palette == 1) {
+            f_color = palette1(val);
         }
         else {
-            f_color = palette(val);
+            f_color = palette0(val);
         }
         if (f_color.a < 0.1)
             discard;
@@ -266,7 +273,7 @@ class TextureVA(VertexArrayWrapper):
 
     def __init__(self, ctx: moderngl.Context, main_rect: np.ndarray,
                  width: int, height: int,
-                 alt_palette: bool = False):
+                 palette: int = 0):
         program = ctx.program(
             vertex_shader=_TEXTURE_VERTEX_SHADER,
             fragment_shader=_TEXTURE_FRAGMENT_SHADER)
@@ -284,7 +291,7 @@ class TextureVA(VertexArrayWrapper):
                          main_rect)
         self.program['Height'] = height
         self.program['TexScale'] = (1, 0, 0, 1)
-        self.program['AltPalette'] = alt_palette
+        self.program['Palette'] = palette
         self.mode = moderngl.TRIANGLE_STRIP
         self.texture = ctx.texture((width, height), 1, dtype='f4')
         # self.texture.filter = moderngl.NEAREST, moderngl.NEAREST
@@ -292,15 +299,21 @@ class TextureVA(VertexArrayWrapper):
         self.texture_buffer = ctx.buffer(reserve=width * height * 4)
         self.position = 0
 
-    def render_data(self, data: np.ndarray):
+    def render(self):
+        self.texture.use(location=0)
+        super().render()
+
+    def write_data(self, data: np.ndarray):
         self.texture_buffer.write(data, offset=(
                 self.height - self.position - 1)
                 * self.width * 4)
         self.texture.write(self.texture_buffer)
-        self.texture.use(location=0)
         self.program['TexOffset'] = self.position
-        super().render()
         self.position = (self.position + 1) % self.height
+
+    def render_data(self, data: np.ndarray):
+        self.write_data(data)
+        self.render()
 
     def set_scale(self, scale_x: float):
         self.program['TexScale'] = (1 / scale_x, 0, 0, 1)
