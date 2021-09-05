@@ -8,7 +8,7 @@ from ..audio import AudioSource
 from .shaders import SignalVA, GridVA, LineVA, TextureVA
 
 # TODO temporary
-from ..tape.format import TurboTapeFormat
+from ..tape.loader import Loader
 
 
 class TriggerEdge(IntEnum):
@@ -118,7 +118,7 @@ class ScopeScene:
         self.pulse_vao: TextureVA = None    # type: ignore
         self.format_vao: TextureVA = None   # type: ignore
         if initialize:
-           self.initialize(ctx)
+            self.initialize(ctx)
 
     def initialize(self, ctx: moderngl.Context):
         if ctx is not None:
@@ -421,8 +421,9 @@ class ScopeSceneSignal(ScopeScene):
         self._play_relay = False
         self._speed_correction = 0
         self._start_level = 0
+        self._integral = 0
         self._pulse_data: np.ndarray = cast(np.ndarray, None)
-        self._tape_format = TurboTapeFormat()
+        self._tape_loader: Optional[Loader] = None
 
         self.trigger_mode_changed_callback: Optional[Callable] = None
         self.update_callback: Optional[Callable] = None
@@ -433,7 +434,7 @@ class ScopeSceneSignal(ScopeScene):
 
     def initialize(self, ctx: moderngl.Context):
         super().initialize(ctx)
-        if self._tape_format is not None:
+        if self._tape_loader is not None:
             self.update_tape_format()
 
     def update_tape_format(self):
@@ -441,10 +442,11 @@ class ScopeSceneSignal(ScopeScene):
             return
         data = np.zeros(self.PULSE_TEX_WIDTH, dtype=np.float32)
         freq = self.audio_source.FREQ
-        for pulse_width in self._tape_format.pulse_widths:
-            samples_count = int(np.rint(pulse_width * freq / 1000000))
-            if samples_count < self.PULSE_TEX_WIDTH:
-                data[samples_count] = 1.
+        if self._tape_loader is not None:
+            for pulse_width in self._tape_loader.pulse_widths:
+                samples_count = int(np.rint(pulse_width * freq / 1000000))
+                if samples_count < self.PULSE_TEX_WIDTH:
+                    data[samples_count] = 1.
         self.format_vao.write_data(data)
 
     def connect_audio(self, audio_source: AudioSource):
@@ -593,8 +595,8 @@ class ScopeSceneSignal(ScopeScene):
         pass
 
     def process_cycle_data_us(self, cycle_width_us: np.ndarray):
-        if self._tape_format:
-            self._tape_format.process_input(cycle_width_us)
+        if self._tape_loader is not None:
+            self._tape_loader.process_input(cycle_width_us)
 
     def process_pulse_data(self, start_level: int, pulse_widths: np.ndarray):
         if len(pulse_widths) == 0:
@@ -744,3 +746,12 @@ class ScopeSceneSignal(ScopeScene):
     @speedCorrection.setter
     def speedCorrection(self, value: int):
         self._speed_correction = value
+
+    @property
+    def tapeDecoder(self):
+        return self._tape_loader
+
+    @tapeDecoder.setter
+    def tapeDecoder(self, decoder):
+        self._tape_loader = decoder
+        self.update_tape_format()

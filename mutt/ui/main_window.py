@@ -2,14 +2,15 @@
 
 import sys
 import math
-from typing import Optional
+from typing import Optional, Dict
 
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import QApplication, QMainWindow, QToolButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QToolButton, QAction
 
 from .scope_scene import ScopeSceneSignal, ScopeScene, TriggerEdge, TriggerMode
 from .main_window_ui import Ui_ScopeWindow
 from ..audio import AudioSource, PyAudioSource
+from ..tape.loader import Loader, KernalLoader, TurboTapeLoader
 
 
 class MUTTMainWindow(QMainWindow):
@@ -217,6 +218,25 @@ class MUTTMainWindow(QMainWindow):
         button.clicked.connect(lambda checked:  # type: ignore
                                prop.__set__(obj, checked))
 
+    def updateDecoder(self):
+        for action in self.decoderActions.values():
+            action.setChecked(False)
+        decoder = self.scene.tapeDecoder
+        if decoder is not None:
+            self.decoderActions[type(decoder)].setChecked(True)
+
+    def showMessage(self, text: str):
+        self.ui.statusbar.showMessage(text)
+
+    def decoderClicked(self, checked, decoder):
+        if checked:
+            inst: Loader = decoder()
+            inst.print_handler = self.showMessage
+            self.scene.tapeDecoder = inst
+        else:
+            self.scene.tapeDecoder = None
+        self.updateDecoder()
+
     def initUi(self):
         self.ui = Ui_ScopeWindow()
         self.ui.setupUi(self)
@@ -279,6 +299,15 @@ class MUTTMainWindow(QMainWindow):
                 }.items():
             self.bindBoolPropertyButton(button, self.scene, prop)
 
+        self.decoderActions: Dict[type, QAction] = {
+            KernalLoader: self.ui.actionCommodore,
+            TurboTapeLoader: self.ui.actionTurbo_Tape_64
+        }
+        for decoder, action in self.decoderActions.items():
+            action.triggered.connect(lambda checked, decoder=decoder:
+                                     self.decoderClicked(checked, decoder))
+        self.updateDecoder()
+
         self.ui.scopeWidget.audioOverflowSignal.connect(self.audioOverflowSlot)
 
         self.showLevels()
@@ -288,7 +317,7 @@ class MUTTMainWindow(QMainWindow):
         self.showSpeedCorrection()
 
         self.ui.horizScaleDial.setValue(6)
-        self.ui.pulseScaleDial.setValue(5)
+        self.ui.pulseScaleDial.setValue(4)
 
 
 def Run():

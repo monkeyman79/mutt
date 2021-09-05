@@ -1151,8 +1151,38 @@
      <height>26</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <widget class="QMenu" name="menuDecoder">
+     <property name="title">
+      <string>Decoder</string>
+     </property>
+     <addaction name="actionCommodore"/>
+     <addaction name="actionTurbo_Tape_64"/>
+    </widget>
+    <addaction name="menuDecoder"/>
+   </widget>
+   <addaction name="menuFile"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionCommodore">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Commodore OS</string>
+   </property>
+  </action>
+  <action name="actionTurbo_Tape_64">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Turbo Tape 64</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
